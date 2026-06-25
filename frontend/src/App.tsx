@@ -7,7 +7,7 @@ import InsightsPage from './pages/InsightsPage';
 import ClaimsPage from './pages/ClaimsPage';
 import AgingPage from './pages/AgingPage';
 import { api } from './api/client';
-import { sessionId } from './store/useStore';
+import { useStore, sessionId } from './store/useStore';
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
   state = { error: null };
