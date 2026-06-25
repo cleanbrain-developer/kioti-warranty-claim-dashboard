@@ -7,7 +7,7 @@ import ClaimFilters from '../components/tables/ClaimFilters';
 import { useStore } from '../store/useStore';
 
 const DEFAULTS = {
-  search: '', status: '', dealer: '', model: '',
+  search: '', status: '', dealer: '', model: '', assignee: '',
   dateFrom: '', dateTo: '', hasHQProduct: '', limit: 20,
 };
 
@@ -22,6 +22,7 @@ export default function ClaimsPage() {
     status: getParam('status'),
     dealer: getParam('dealer'),
     model: getParam('model'),
+    assignee: getParam('assignee'),
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
@@ -42,6 +43,7 @@ export default function ClaimsPage() {
     status: getParam('status'),
     dealer: getParam('dealer'),
     model: getParam('model'),
+    assignee: getParam('assignee'),
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
@@ -60,6 +62,14 @@ export default function ClaimsPage() {
     queryFn: api.getFilterOptions,
     staleTime: 10 * 60 * 1000,
   });
+
+  // Sync staged assignee from URL when navigating from Insights chart
+  React.useEffect(() => {
+    const urlAssignee = getParam('assignee');
+    if (urlAssignee && urlAssignee !== staged.assignee) {
+      setStaged(s => ({ ...s, assignee: urlAssignee }));
+    }
+  }, [searchParams]);
 
   // Merge infinite scroll rows
   React.useEffect(() => {
@@ -82,6 +92,7 @@ export default function ClaimsPage() {
     if (staged.status) params.status = staged.status;
     if (staged.dealer) params.dealer = staged.dealer;
     if (staged.model) params.model = staged.model;
+    if (staged.assignee) params.assignee = staged.assignee;
     if (staged.dateFrom) params.dateFrom = staged.dateFrom;
     if (staged.dateTo) params.dateTo = staged.dateTo;
     if (staged.hasHQProduct) params.hasHQProduct = staged.hasHQProduct;
@@ -131,7 +142,7 @@ export default function ClaimsPage() {
     <div className="space-y-4 animate-slide-up">
       <ClaimFilters
         filters={staged}
-        options={filterOptions || { statuses: [], dealers: [], models: [] }}
+        options={filterOptions || { statuses: [], dealers: [], models: [], assignees: [] }}
         onChange={v => setStaged(s => ({ ...s, ...v }))}
         onApply={applyFilters}
         onClear={clearFilters}

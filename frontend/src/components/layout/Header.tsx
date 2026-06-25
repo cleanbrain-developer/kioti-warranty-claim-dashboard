@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Users, Sun, Globe } from 'lucide-react';
+import { RefreshCw, Users, Sun, Moon, Globe } from 'lucide-react';
 import { api } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { TIMEZONE_OPTIONS } from '../../types';
@@ -8,7 +8,7 @@ import SyncModal from '../ui/SyncModal';
 
 export default function Header() {
   const [syncOpen, setSyncOpen] = useState(false);
-  const { timezone, setTimezone } = useStore();
+  const { timezone, setTimezone, theme, toggleTheme } = useStore();
 
   const { data: syncStatus } = useQuery({
     queryKey: ['sync', 'status'],
@@ -108,9 +108,13 @@ export default function Header() {
               <span className="hidden sm:inline">today</span>
             </div>
 
-            {/* Theme placeholder */}
-            <button className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-secondary transition-colors">
-              <Sun size={15} />
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-secondary transition-colors"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
           </div>
         </div>

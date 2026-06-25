@@ -26,6 +26,7 @@ model WarrantyClaim {
   laborAmount     Decimal?  @map("labor_amount") @db.Decimal(15, 2)
   partsAmount     Decimal?  @map("parts_amount") @db.Decimal(15, 2)
   hasHQProduct    Boolean   @default(false) @map("has_hq_product")
+  assignedTo      String?   @map("assigned_to")
   sfCreatedDate   DateTime? @map("sf_created_date")
   sfLastModified  DateTime? @map("sf_last_modified")
   rawData         Json?     @map("raw_data")

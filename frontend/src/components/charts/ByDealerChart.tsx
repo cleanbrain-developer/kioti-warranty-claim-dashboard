@@ -24,7 +24,7 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
       className: 'echarts-tooltip-dark',
       formatter: (params: any[]) => {
         const p = params[0];
-        return `<div class="font-semibold mb-1">${p.name}</div><div>${p.value} claims</div>`;
+        return `<div style="color:var(--tooltip-color)"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value} claims</div></div>`;
       },
     },
     grid: { left: '2%', right: '8%', top: '2%', bottom: '2%', containLabel: true },
@@ -32,15 +32,15 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
-      axisLabel: { color: '#6e7681', fontSize: 11 },
+      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
+      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
     },
     yAxis: {
       type: 'category',
       data: sorted.map(d => d.dealer.length > 22 ? d.dealer.slice(0, 22) + '…' : d.dealer),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#8b949e', fontSize: 11 },
+      axisLabel: { color: 'var(--text-secondary)', fontSize: 11 },
     },
     series: [
       {
@@ -62,7 +62,7 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
         label: {
           show: true,
           position: 'right',
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           fontSize: 11,
         },
         barMaxWidth: 20,

@@ -30,6 +30,7 @@ export const api = {
   getByDealer: (limit = 15) => request<any[]>(`/analytics/by-dealer?limit=${limit}`),
   getByModel: (limit = 15) => request<any[]>(`/analytics/by-model?limit=${limit}`),
   getMonthlyTrend: (months = 12) => request<any[]>(`/analytics/monthly-trend?months=${months}`),
+  getByAssignee: (limit = 20) => request<any[]>(`/analytics/by-assignee?limit=${limit}`),
   getAging: () => request<any>('/analytics/aging'),
 
   // Sync

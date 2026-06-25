@@ -36,7 +36,7 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     },
     legend: {
       data: ['Total', 'Approved', 'Rejected'],
-      textStyle: { color: '#8b949e', fontSize: 11 },
+      textStyle: { color: 'var(--text-secondary)', fontSize: 11 },
       itemWidth: 12,
       itemHeight: 4,
     },
@@ -44,17 +44,17 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     xAxis: {
       type: 'category',
       data: months,
-      axisLine: { lineStyle: { color: '#30363d' } },
+      axisLine: { lineStyle: { color: 'var(--border-default)' } },
       axisTick: { show: false },
-      axisLabel: { color: '#8b949e', fontSize: 11 },
+      axisLabel: { color: 'var(--text-secondary)', fontSize: 11 },
       boundaryGap: false,
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
-      axisLabel: { color: '#6e7681', fontSize: 11 },
+      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
+      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
     },
     series: [
       {

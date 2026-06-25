@@ -2,6 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme Variables ─────────────────────────────── */
+:root {
+  --bg-base: #0d1117;
+  --bg-card: #161b22;
+  --bg-hover: #1c2128;
+  --bg-elevated: #21262d;
+  --border-default: #30363d;
+  --border-subtle: #21262d;
+  --border-emphasis: #484f58;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --text-link: #58a6ff;
+  --skeleton-from: #21262d;
+  --skeleton-to: #2d333b;
+  --tooltip-bg: #1c2128;
+  --tooltip-border: #30363d;
+  --tooltip-color: #e6edf3;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --date-icon-filter: invert(60%) sepia(10%) saturate(300%) hue-rotate(180deg);
+}
+
+[data-theme="light"] {
+  --bg-base: #f6f8fa;
+  --bg-card: #ffffff;
+  --bg-hover: #f3f4f6;
+  --bg-elevated: #eaecef;
+  --border-default: #d0d7de;
+  --border-subtle: #eaecef;
+  --border-emphasis: #afb8c1;
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #9198a1;
+  --text-link: #0969da;
+  --skeleton-from: #eaecef;
+  --skeleton-to: #d0d7de;
+  --tooltip-bg: #ffffff;
+  --tooltip-border: #d0d7de;
+  --tooltip-color: #1f2328;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23656d76' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --date-icon-filter: invert(40%) sepia(10%) saturate(300%) hue-rotate(180deg);
+}
+
 @layer base {
   * { box-sizing: border-box; }
 
@@ -22,13 +65,42 @@
   ::-webkit-scrollbar-thumb:hover { @apply bg-border-emphasis; }
 
   select option {
-    @apply bg-bg-elevated text-text-primary;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+
+  /* Date input: English placeholder + visible calendar icon */
+  input[type="date"] {
+    color-scheme: dark;
+  }
+  [data-theme="light"] input[type="date"] {
+    color-scheme: light;
+  }
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    color: var(--text-primary);
+  }
+  input[type="date"]::-webkit-datetime-edit-text {
+    color: var(--text-muted);
+  }
+  input[type="date"]::-webkit-datetime-edit-month-field,
+  input[type="date"]::-webkit-datetime-edit-day-field,
+  input[type="date"]::-webkit-datetime-edit-year-field {
+    color: var(--text-secondary);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: var(--date-icon-filter);
+    opacity: 0.8;
+    cursor: pointer;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-bg-card border border-border rounded-xl shadow-card;
+    @apply bg-bg-card border border-border rounded-xl;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 0 1px rgba(128,128,128,0.08);
   }
 
   .btn {
@@ -57,13 +129,13 @@
 
   .select {
     @apply input appearance-none cursor-pointer pr-8 bg-no-repeat;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: var(--select-arrow);
     background-position: right 8px center;
   }
 
   .skeleton {
-    @apply bg-bg-elevated rounded animate-pulse;
-    background: linear-gradient(90deg, #21262d 25%, #2d333b 50%, #21262d 75%);
+    @apply rounded animate-pulse;
+    background: linear-gradient(90deg, var(--skeleton-from) 25%, var(--skeleton-to) 50%, var(--skeleton-from) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
   }
@@ -79,10 +151,11 @@
 
 /* ECharts tooltip */
 .echarts-tooltip-dark {
-  background: #1c2128 !important;
-  border: 1px solid #30363d !important;
+  background: var(--tooltip-bg) !important;
+  border: 1px solid var(--tooltip-border) !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
   font-family: 'Inter', sans-serif !important;
   font-size: 13px !important;
+  color: var(--tooltip-color) !important;
 }

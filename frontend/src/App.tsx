@@ -32,6 +32,12 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
 }
 
 function AppInner() {
+  const { theme } = useStore();
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   useEffect(() => {
     api.trackVisit(sessionId).catch(() => {});
   }, []);

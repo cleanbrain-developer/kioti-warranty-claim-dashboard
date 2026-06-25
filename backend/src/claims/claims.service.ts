@@ -9,6 +9,7 @@ export interface ClaimsQuery {
   status?: string;
   dealer?: string;
   model?: string;
+  assignee?: string;
   dateFrom?: string;
   dateTo?: string;
   hasHQProduct?: string;
@@ -51,6 +52,7 @@ export class ClaimsService {
     if (q.status) where.status = q.status;
     if (q.dealer) where.dealerName = { contains: q.dealer, mode: 'insensitive' };
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
+    if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };
     if (q.hasHQProduct === 'true') where.hasHQProduct = true;
 
     if (q.dateFrom || q.dateTo) {
@@ -59,7 +61,7 @@ export class ClaimsService {
       if (q.dateTo) where.submittedDate.lte = new Date(q.dateTo);
     }
 
-    const validSortFields = ['submittedDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate'];
+    const validSortFields = ['submittedDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo'];
     const sortBy = validSortFields.includes(q.sortBy) ? q.sortBy : 'sfCreatedDate';
     const sortDir = q.sortDir === 'asc' ? 'asc' : 'desc';
 
@@ -141,15 +143,17 @@ export class ClaimsService {
   }
 
   async getFilterOptions() {
-    const [statuses, dealers, models] = await Promise.all([
+    const [statuses, dealers, models, assignees] = await Promise.all([
       this.prisma.warrantyClaim.groupBy({ by: ['status'], where: { status: { not: null } }, orderBy: { status: 'asc' } }),
       this.prisma.warrantyClaim.groupBy({ by: ['dealerName'], where: { dealerName: { not: null } }, orderBy: { dealerName: 'asc' } }),
       this.prisma.warrantyClaim.groupBy({ by: ['modelName'], where: { modelName: { not: null } }, orderBy: { modelName: 'asc' } }),
+      this.prisma.warrantyClaim.groupBy({ by: ['assignedTo'], where: { assignedTo: { not: null } }, orderBy: { assignedTo: 'asc' } }),
     ]);
     return {
       statuses: statuses.map(s => s.status).filter(Boolean),
       dealers: dealers.map(d => d.dealerName).filter(Boolean),
       models: models.map(m => m.modelName).filter(Boolean),
+      assignees: assignees.map(a => a.assignedTo).filter(Boolean),
     };
   }
 }

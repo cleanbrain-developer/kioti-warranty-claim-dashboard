@@ -9,21 +9,21 @@ export default {
       },
       colors: {
         bg: {
-          base: '#0d1117',
-          card: '#161b22',
-          hover: '#1c2128',
-          elevated: '#21262d',
+          base: 'var(--bg-base)',
+          card: 'var(--bg-card)',
+          hover: 'var(--bg-hover)',
+          elevated: 'var(--bg-elevated)',
         },
         border: {
-          DEFAULT: '#30363d',
-          subtle: '#21262d',
-          emphasis: '#484f58',
+          DEFAULT: 'var(--border-default)',
+          subtle: 'var(--border-subtle)',
+          emphasis: 'var(--border-emphasis)',
         },
         text: {
-          primary: '#e6edf3',
-          secondary: '#8b949e',
-          muted: '#6e7681',
-          link: '#58a6ff',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          muted: 'var(--text-muted)',
+          link: 'var(--text-link)',
         },
         accent: {
           blue: '#1f6feb',
@@ -49,6 +49,7 @@ export default {
       },
       boxShadow: {
         card: '0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05)',
+        'card-light': '0 1px 3px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
         glow: '0 0 20px rgba(88,166,255,0.15)',
       },
       animation: {

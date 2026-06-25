@@ -7,6 +7,7 @@ interface FilterValues {
   status: string;
   dealer: string;
   model: string;
+  assignee: string;
   dateFrom: string;
   dateTo: string;
   hasHQProduct: string;
@@ -15,7 +16,7 @@ interface FilterValues {
 
 interface Props {
   filters: FilterValues;
-  options: { statuses: string[]; dealers: string[]; models: string[] };
+  options: { statuses: string[]; dealers: string[]; models: string[]; assignees: string[] };
   onChange: (f: Partial<FilterValues>) => void;
   onApply: () => void;
   onClear: () => void;
@@ -28,7 +29,7 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
 
   const hasActiveFilters = !!(
     filters.search || filters.status || filters.dealer ||
-    filters.model || filters.dateFrom || filters.dateTo || filters.hasHQProduct
+    filters.model || filters.assignee || filters.dateFrom || filters.dateTo || filters.hasHQProduct
   );
 
   return (
@@ -85,7 +86,7 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
       {/* Filter fields */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
             {/* Search */}
             <div className="relative xl:col-span-2">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
@@ -133,9 +134,24 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
               {options.models.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
 
+            {/* Assignee */}
+            <select
+              value={filters.assignee}
+              onChange={e => onChange({ assignee: e.target.value })}
+              className="select"
+            >
+              <option value="">All Assignees</option>
+              {(options.assignees || []).map(a => (
+                <option key={a} value={a} title={a}>
+                  {a.length > 25 ? a.slice(0, 25) + '…' : a}
+                </option>
+              ))}
+            </select>
+
             {/* Date From */}
             <input
               type="date"
+              lang="en"
               value={filters.dateFrom}
               onChange={e => onChange({ dateFrom: e.target.value })}
               className="input text-sm"
@@ -145,6 +161,7 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
             {/* Date To */}
             <input
               type="date"
+              lang="en"
               value={filters.dateTo}
               onChange={e => onChange({ dateTo: e.target.value })}
               className="input text-sm"

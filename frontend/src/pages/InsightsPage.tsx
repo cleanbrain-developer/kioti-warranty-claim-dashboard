@@ -6,6 +6,7 @@ import ByStatusChart from '../components/charts/ByStatusChart';
 import ByDealerChart from '../components/charts/ByDealerChart';
 import ByModelChart from '../components/charts/ByModelChart';
 import MonthlyTrendChart from '../components/charts/MonthlyTrendChart';
+import ByAssigneeChart from '../components/charts/ByAssigneeChart';
 
 export default function InsightsPage() {
   const { data: overview, isLoading: loadingOverview } = useQuery({
@@ -27,6 +28,10 @@ export default function InsightsPage() {
   const { data: trend, isLoading: loadingTrend } = useQuery({
     queryKey: ['analytics', 'trend'],
     queryFn: () => api.getMonthlyTrend(12),
+  });
+  const { data: byAssignee, isLoading: loadingAssignee } = useQuery({
+    queryKey: ['analytics', 'byAssignee'],
+    queryFn: () => api.getByAssignee(20),
   });
 
   return (
@@ -68,6 +73,19 @@ export default function InsightsPage() {
           </h2>
           <ByModelChart data={byModel || []} loading={loadingModel} />
         </div>
+      </div>
+
+      {/* Assignee row */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+            Open Claims by Assignee
+          </h2>
+          <span className="text-xs text-text-muted">
+            Top 20 · Click bar to view in Claims tab
+          </span>
+        </div>
+        <ByAssigneeChart data={byAssignee || []} loading={loadingAssignee} />
       </div>
     </div>
   );

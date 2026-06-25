@@ -14,6 +14,7 @@ export class ClaimsController {
       status: query.status,
       dealer: query.dealer,
       model: query.model,
+      assignee: query.assignee,
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
       hasHQProduct: query.hasHQProduct,

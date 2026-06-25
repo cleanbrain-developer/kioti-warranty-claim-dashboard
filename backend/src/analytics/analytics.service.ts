@@ -124,6 +124,34 @@ export class AnalyticsService {
     return rows;
   }
 
+  async getByAssignee(limit = 20) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        COALESCE(assigned_to, 'Unassigned') as assignee,
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN status NOT ILIKE '%approved%' AND status NOT ILIKE '%paid%'
+          AND status NOT ILIKE '%rejected%' AND status NOT ILIKE '%closed%'
+          AND status NOT ILIKE '%completed%' AND status NOT ILIKE '%denied%' THEN 1 END)::int as open,
+        COUNT(CASE WHEN status ILIKE '%approved%' OR status ILIKE '%paid%' OR status ILIKE '%completed%' THEN 1 END)::int as approved,
+        COUNT(CASE WHEN status ILIKE '%rejected%' OR status ILIKE '%denied%' THEN 1 END)::int as rejected,
+        COUNT(CASE WHEN status ILIKE '%pending%' OR status ILIKE '%submitted%' OR status ILIKE '%review%' THEN 1 END)::int as pending
+      FROM warranty_claims
+      GROUP BY COALESCE(assigned_to, 'Unassigned')
+      ORDER BY open DESC, total DESC
+      LIMIT ${limit}
+    `;
+    return rows;
+  }
+
+  async getAssignees() {
+    const rows = await this.prisma.warrantyClaim.groupBy({
+      by: ['assignedTo'],
+      where: { assignedTo: { not: null } },
+      orderBy: { assignedTo: 'asc' },
+    });
+    return rows.map(r => r.assignedTo).filter(Boolean);
+  }
+
   async getAging() {
     const buckets = await this.prisma.$queryRaw<any[]>`
       WITH aged AS (
@@ -211,20 +239,24 @@ export class AnalyticsService {
       LIMIT 15
     `;
 
-    const oldestClaims = await this.prisma.warrantyClaim.findMany({
-      where: {
-        status: {
-          notIn: ['Approved', 'Paid', 'Rejected', 'Denied', 'Closed', 'Completed'],
-        },
-        submittedDate: { not: null },
-      },
-      orderBy: { submittedDate: 'asc' },
-      take: 10,
-      select: {
-        id: true, sfId: true, claimNumber: true, dealerName: true, modelName: true,
-        status: true, submittedDate: true, totalAmount: true,
-      },
-    });
+    const oldestClaims = await this.prisma.$queryRaw<any[]>`
+      SELECT id, sf_id as "sfId", claim_number as "claimNumber",
+             dealer_name as "dealerName", model_name as "modelName",
+             status, submitted_date as "submittedDate",
+             total_amount::float as "totalAmount",
+             EXTRACT(EPOCH FROM (NOW() - COALESCE(submitted_date, created_at))) / 86400 AS "ageDays"
+      FROM warranty_claims
+      WHERE status IS NOT NULL
+        AND status NOT ILIKE '%approved%'
+        AND status NOT ILIKE '%paid%'
+        AND status NOT ILIKE '%rejected%'
+        AND status NOT ILIKE '%closed%'
+        AND status NOT ILIKE '%completed%'
+        AND status NOT ILIKE '%denied%'
+        AND COALESCE(submitted_date, created_at) IS NOT NULL
+      ORDER BY COALESCE(submitted_date, created_at) ASC
+      LIMIT 10
+    `;
 
     return {
       buckets: buckets[0] || {},
@@ -233,9 +265,7 @@ export class AnalyticsService {
       oldestClaims: oldestClaims.map(c => ({
         ...c,
         totalAmount: c.totalAmount ? Number(c.totalAmount) : null,
-        ageDays: c.submittedDate
-          ? Math.floor((Date.now() - c.submittedDate.getTime()) / 86400000)
-          : null,
+        ageDays: c.ageDays ? Math.floor(Number(c.ageDays)) : null,
       })),
     };
   }

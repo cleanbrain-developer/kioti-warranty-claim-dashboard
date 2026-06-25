@@ -71,7 +71,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     },
     legend: {
       data: BUCKET_LABELS,
-      textStyle: { color: '#8b949e', fontSize: 10 },
+      textStyle: { color: 'var(--text-secondary)', fontSize: 10 },
       itemWidth: 10,
       itemHeight: 6,
       bottom: 0,
@@ -81,8 +81,8 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
-      axisLabel: { color: '#6e7681', fontSize: 11 },
+      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
+      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
     },
     yAxis: {
       type: 'category',
@@ -92,7 +92,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       }),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#8b949e', fontSize: 11 },
+      axisLabel: { color: 'var(--text-secondary)', fontSize: 11 },
     },
     series,
   };

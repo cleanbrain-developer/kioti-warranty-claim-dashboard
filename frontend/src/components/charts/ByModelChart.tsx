@@ -25,23 +25,23 @@ export default function ByModelChart({ data, loading }: Props) {
       className: 'echarts-tooltip-dark',
       formatter: (params: any[]) => {
         const p = params[0];
-        return `<div class="font-semibold mb-1">${p.name}</div><div>${p.value} claims</div>`;
+        return `<div style="color:var(--tooltip-color)"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value} claims</div></div>`;
       },
     },
     grid: { left: '2%', right: '4%', top: '4%', bottom: '12%', containLabel: true },
     xAxis: {
       type: 'category',
       data: sorted.map(d => d.model.length > 12 ? d.model.slice(0, 12) + '…' : d.model),
-      axisLine: { lineStyle: { color: '#30363d' } },
+      axisLine: { lineStyle: { color: 'var(--border-default)' } },
       axisTick: { show: false },
-      axisLabel: { color: '#8b949e', fontSize: 11, rotate: 30, interval: 0 },
+      axisLabel: { color: 'var(--text-secondary)', fontSize: 11, rotate: 30, interval: 0 },
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#30363d', type: 'dashed' } },
-      axisLabel: { color: '#6e7681', fontSize: 11 },
+      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
+      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
     },
     series: [
       {
@@ -56,7 +56,7 @@ export default function ByModelChart({ data, loading }: Props) {
         label: {
           show: true,
           position: 'top',
-          color: '#8b949e',
+          color: 'var(--text-secondary)',
           fontSize: 10,
         },
         barMaxWidth: 40,

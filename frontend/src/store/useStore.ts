@@ -8,17 +8,23 @@ interface AppState {
   setScrollMode: (mode: 'pagination' | 'infinite') => void;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (v: boolean) => void;
+  theme: 'dark' | 'light';
+  setTheme: (t: 'dark' | 'light') => void;
+  toggleTheme: () => void;
 }
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       timezone: 'local',
       setTimezone: (tz) => set({ timezone: tz }),
       scrollMode: 'pagination',
       setScrollMode: (mode) => set({ scrollMode: mode }),
       sidebarCollapsed: false,
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+      theme: 'dark',
+      setTheme: (t) => set({ theme: t }),
+      toggleTheme: () => set({ theme: get().theme === 'dark' ? 'light' : 'dark' }),
     }),
     { name: 'kioti-warranty-prefs' },
   ),

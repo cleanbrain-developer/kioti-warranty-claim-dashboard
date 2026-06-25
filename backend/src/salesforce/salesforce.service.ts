@@ -167,6 +167,7 @@ export class SalesforceService {
         laborAmount: ['LaborAmount__c', 'LaborCost__c', 'TotalLabor__c'],
         partsAmount: ['PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c'],
         hasHQProduct: ['HasHQProduct__c', 'HQProductIncluded__c', 'IsHQProduct__c', 'ContainsHQParts__c'],
+        assignedTo: ['PersonInCharge__c', 'AssignedTo__c', 'AssignedUser__c', 'HandlerName__c', 'ClaimHandler__c'],
       };
 
       const discovered: Record<string, string> = {};
@@ -208,8 +209,18 @@ export class SalesforceService {
       .filter(v => v && !v.includes('.'))
       .filter((v, i, a) => a.indexOf(v) === i);
 
-    const baseFields = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate', this.claimTypeField];
-    const allFields = [...new Set([...baseFields, ...extraFields])].join(', ');
+    // Add dealer relationship field so we can resolve dealer name
+    const dealerRelFields: string[] = [];
+    if (f.dealerLookup) {
+      if (f.dealerLookup === 'AccountId') {
+        dealerRelFields.push('Account.Name');
+      } else if (f.dealerLookup.endsWith('__c')) {
+        dealerRelFields.push(`${f.dealerLookup.replace('__c', '__r')}.Name`);
+      }
+    }
+
+    const baseFields = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate', this.claimTypeField, 'Owner.Name'];
+    const allFields = [...new Set([...baseFields, ...extraFields, ...dealerRelFields])].join(', ');
 
     let soql = `SELECT ${allFields} FROM ${this.claimObject} WHERE ${this.claimTypeField} = '${this.claimTypeValue}'`;
     if (lastModifiedDate) {
@@ -244,22 +255,32 @@ export class SalesforceService {
     const batchSize = 100;
     const results: any[] = [];
 
-    // Try multiple possible parent field names
     const parentFields = ['Claim__c', 'ClaimId__c', 'ParentClaim__c', 'WarrantyClaim__c'];
+    // Detail fields to try (degrade gracefully if some don't exist)
+    const detailFieldSets = [
+      'Status__c, JudgmentResult__c, JudgedDate__c, TotalAmount__c',
+      'Status__c, TotalAmount__c',
+      '',
+    ];
 
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
       const batch = claimSfIds.slice(i, i + batchSize);
       const ids = batch.map(id => `'${id}'`).join(', ');
 
+      let synced = false;
       for (const parentField of parentFields) {
-        try {
-          const soql = `SELECT Id, Name, ${parentField}, Status__c, JudgmentResult__c, JudgedDate__c, TotalAmount__c, CreatedDate FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`;
-          const rows = await this.query(soql);
-          // Normalize parent field to 'claimSfId'
-          results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
-          break;
-        } catch {
-          // Try next field
+        if (synced) break;
+        for (const details of detailFieldSets) {
+          try {
+            const fields = ['Id', 'Name', parentField, 'CreatedDate', ...(details ? [details] : [])].join(', ');
+            const soql = `SELECT ${fields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`;
+            const rows = await this.query(soql);
+            results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+            synced = true;
+            break;
+          } catch {
+            // Try next field set / parent field
+          }
         }
       }
     }
@@ -271,20 +292,31 @@ export class SalesforceService {
     const batchSize = 100;
     const results: any[] = [];
 
-    const parentFields = ['Claim__c', 'ClaimId__c', 'WarrantyClaim__c'];
+    const parentFields = ['Claim__c', 'FinancialOrder__c', 'ClaimId__c', 'WarrantyClaim__c'];
+    const detailFieldSets = [
+      'Type__c, Status__c, Amount__c, OrderDate__c',
+      'Status__c, Amount__c',
+      '',
+    ];
 
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
       const batch = claimSfIds.slice(i, i + batchSize);
       const ids = batch.map(id => `'${id}'`).join(', ');
 
+      let synced = false;
       for (const parentField of parentFields) {
-        try {
-          const soql = `SELECT Id, Name, ${parentField}, Type__c, Status__c, Amount__c, OrderDate__c, CreatedDate FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`;
-          const rows = await this.query(soql);
-          results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
-          break;
-        } catch {
-          // Try next
+        if (synced) break;
+        for (const details of detailFieldSets) {
+          try {
+            const fields = ['Id', 'Name', parentField, 'CreatedDate', ...(details ? [details] : [])].join(', ');
+            const soql = `SELECT ${fields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`;
+            const rows = await this.query(soql);
+            results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+            synced = true;
+            break;
+          } catch {
+            // Try next
+          }
         }
       }
     }
@@ -321,9 +353,27 @@ export class SalesforceService {
     dealerAccountId: string; dealerName: string; modelName: string; serialNumber: string;
     repairDate: Date; submittedDate: Date; approvedDate: Date; rejectedDate: Date;
     totalAmount: number; laborAmount: number; partsAmount: number; hasHQProduct: boolean;
-    sfCreatedDate: Date; sfLastModified: Date; rawData: any;
+    assignedTo: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
   } {
     const f = this.claimFieldMap;
+
+    // Assignee: custom field first, then Owner.Name from relationship
+    const assignedTo = (f.assignedTo ? record[f.assignedTo] : null)
+      || record.Owner?.Name
+      || null;
+
+    // Dealer name: explicit field, or relationship object, or AccountId relationship
+    let dealerName: string | null = null;
+    if (f.dealerName && record[f.dealerName]) {
+      dealerName = record[f.dealerName];
+    } else if (f.dealerLookup) {
+      if (f.dealerLookup === 'AccountId') {
+        dealerName = record.Account?.Name || null;
+      } else if (f.dealerLookup.endsWith('__c')) {
+        const relObj = record[f.dealerLookup.replace('__c', '__r')];
+        dealerName = relObj?.Name || null;
+      }
+    }
 
     return {
       id: record.Id,
@@ -332,7 +382,7 @@ export class SalesforceService {
       claimType: record[this.claimTypeField],
       status: f.status ? record[f.status] : null,
       dealerAccountId: f.dealerLookup ? record[f.dealerLookup] : null,
-      dealerName: f.dealerName ? record[f.dealerName] : (f.dealerLookup ? record[`${f.dealerLookup.replace('__c', '__r')}?.Name`] : null),
+      dealerName,
       modelName: f.model ? record[f.model] : null,
       serialNumber: f.serialNumber ? record[f.serialNumber] : null,
       repairDate: f.repairDate ? (record[f.repairDate] ? new Date(record[f.repairDate]) : null) : null,
@@ -343,6 +393,7 @@ export class SalesforceService {
       laborAmount: f.laborAmount ? (record[f.laborAmount] ? Number(record[f.laborAmount]) : null) : null,
       partsAmount: f.partsAmount ? (record[f.partsAmount] ? Number(record[f.partsAmount]) : null) : null,
       hasHQProduct: f.hasHQProduct ? Boolean(record[f.hasHQProduct]) : false,
+      assignedTo,
       sfCreatedDate: record.CreatedDate ? new Date(record.CreatedDate) : null,
       sfLastModified: record.LastModifiedDate ? new Date(record.LastModifiedDate) : null,
       rawData: record,

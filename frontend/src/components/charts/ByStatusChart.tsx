@@ -26,13 +26,13 @@ export default function ByStatusChart({ data, loading }: Props) {
       trigger: 'item',
       className: 'echarts-tooltip-dark',
       formatter: (p: any) =>
-        `<div class="font-semibold">${p.name}</div><div>${p.value} claims (${p.percent}%)</div>`,
+        `<div style="color:var(--tooltip-color)"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value.toLocaleString()} claims (${p.percent}%)</div></div>`,
     },
     legend: {
       orient: 'vertical',
       right: 0,
       top: 'center',
-      textStyle: { color: '#8b949e', fontSize: 11 },
+      textStyle: { color: 'var(--text-secondary)', fontSize: 11 },
       itemWidth: 10,
       itemHeight: 10,
       formatter: (name: string) => name.length > 16 ? name.slice(0, 16) + '…' : name,
@@ -41,13 +41,28 @@ export default function ByStatusChart({ data, loading }: Props) {
       {
         name: 'Claims by Status',
         type: 'pie',
-        radius: ['40%', '70%'],
+        radius: ['38%', '68%'],
         center: ['38%', '50%'],
         avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
-        label: { show: false },
+        itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+        label: {
+          show: true,
+          position: 'inside',
+          formatter: (p: any) => p.percent >= 5 ? p.value.toLocaleString() : '',
+          color: '#ffffff',
+          fontSize: 11,
+          fontWeight: '600',
+          textShadowColor: 'rgba(0,0,0,0.6)',
+          textShadowBlur: 3,
+        },
         emphasis: {
-          label: { show: true, fontSize: 13, fontWeight: 'bold', color: '#e6edf3' },
+          label: {
+            show: true,
+            fontSize: 13,
+            fontWeight: 'bold',
+            color: '#ffffff',
+            formatter: (p: any) => `${p.value.toLocaleString()}\n(${p.percent}%)`,
+          },
           itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.4)' },
         },
         data: data.map((d, i) => ({
