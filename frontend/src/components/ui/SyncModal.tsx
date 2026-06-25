@@ -69,6 +69,7 @@ function ProgressRow({
 
 export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props) {
   const [password, setPassword] = useState('');
+  const [forceFullSync, setForceFullSync] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const qc = useQueryClient();
 
@@ -80,7 +81,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   });
 
   const mutation = useMutation({
-    mutationFn: (pw: string) => api.triggerSync(pw),
+    mutationFn: ({ pw, force }: { pw: string; force: boolean }) => api.triggerSync(pw, force),
     onSuccess: (data) => {
       setResult(data);
       if (data.success) {
@@ -96,7 +97,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setResult(null);
-    mutation.mutate(password);
+    mutation.mutate({ pw: password, force: forceFullSync });
   };
 
   const handleClose = () => {
@@ -145,6 +146,40 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
                 <span><span className="text-text-secondary">{lastSync.ordersSynced ?? 0}</span> orders</span>
                 <span><span className="text-text-secondary">{lastSync.docsSynced ?? 0}</span> docs</span>
               </div>
+            </div>
+          )}
+
+          {/* Sync mode toggle */}
+          {!showProgress && !isDone && !isError && (
+            <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-bg-elevated/50">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-xs font-medium text-text-primary">
+                    {forceFullSync ? 'Full Re-sync' : 'Incremental Sync'}
+                  </span>
+                  {!forceFullSync && lastSync && (
+                    <span className="text-xs text-text-muted">
+                      (since {format(new Date(lastSync.completedAt), 'MMM d, h:mm a')})
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  {forceFullSync
+                    ? 'Re-syncs all records regardless of modification date. Use when data is missing or after field mapping reset.'
+                    : 'Only fetches records modified since the last sync. Faster, but skips older missing data.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForceFullSync(v => !v)}
+                className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${
+                  forceFullSync ? 'bg-accent-orange' : 'bg-bg-hover'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  forceFullSync ? 'translate-x-4' : 'translate-x-0.5'
+                }`} />
+              </button>
             </div>
           )}
 
@@ -253,11 +288,17 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
                 <button
                   type="submit"
                   disabled={!password || mutation.isPending}
-                  className="btn-primary flex-1"
+                  className={`flex-1 flex items-center justify-center gap-1.5 font-medium text-sm px-4 py-2 rounded-lg transition-all disabled:opacity-50 ${
+                    forceFullSync
+                      ? 'bg-accent-orange hover:bg-accent-orange/90 text-white'
+                      : 'btn-primary'
+                  }`}
                 >
                   {mutation.isPending
                     ? <><RefreshCw size={14} className="animate-spin" /> Starting…</>
-                    : <><RefreshCw size={14} /> Sync Now</>
+                    : forceFullSync
+                      ? <><RefreshCw size={14} /> Full Re-sync</>
+                      : <><RefreshCw size={14} /> Sync Now</>
                   }
                 </button>
               </div>
