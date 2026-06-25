@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Header from './components/layout/Header';
@@ -9,13 +9,33 @@ import AgingPage from './pages/AgingPage';
 import { api } from './api/client';
 import { sessionId } from './store/useStore';
 
-export default function App() {
-  // Track visitor on app load
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ background: '#0d1117', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <div style={{ background: '#161b22', border: '1px solid #da3633', borderRadius: 12, padding: 32, maxWidth: 700, width: '100%' }}>
+            <h2 style={{ color: '#f85149', fontFamily: 'monospace', marginBottom: 12 }}>Application Error</h2>
+            <pre style={{ color: '#e6edf3', fontFamily: 'monospace', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {(this.state.error as Error).message}
+              {'\n\n'}
+              {(this.state.error as Error).stack}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AppInner() {
   useEffect(() => {
     api.trackVisit(sessionId).catch(() => {});
   }, []);
 
-  // Poll visitor count every 60 seconds
   useQuery({
     queryKey: ['visitors', 'today'],
     queryFn: api.getTodayVisitors,
@@ -37,5 +57,13 @@ export default function App() {
         </main>
       </div>
     </BrowserRouter>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }
