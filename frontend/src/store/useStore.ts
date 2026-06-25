@@ -25,11 +25,22 @@ export const useStore = create<AppState>()(
 );
 
 // Session ID for visitor tracking (persists only for browser session)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for HTTP (non-secure) contexts
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 function getSessionId(): string {
   const key = 'kioti_sid';
   let sid = sessionStorage.getItem(key);
   if (!sid) {
-    sid = crypto.randomUUID();
+    sid = generateUUID();
     sessionStorage.setItem(key, sid);
   }
   return sid;
