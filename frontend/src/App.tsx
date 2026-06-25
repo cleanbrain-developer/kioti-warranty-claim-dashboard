@@ -6,6 +6,7 @@ import Navigation from './components/layout/Navigation';
 import InsightsPage from './pages/InsightsPage';
 import ClaimsPage from './pages/ClaimsPage';
 import AgingPage from './pages/AgingPage';
+import SettingsPage from './pages/SettingsPage';
 import { api } from './api/client';
 import { useStore, sessionId } from './store/useStore';
 
@@ -58,6 +59,7 @@ function AppInner() {
             <Route path="/" element={<InsightsPage />} />
             <Route path="/claims" element={<ClaimsPage />} />
             <Route path="/aging" element={<AgingPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

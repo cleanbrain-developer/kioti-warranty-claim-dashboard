@@ -24,6 +24,7 @@ const ALL_KEYS = Object.keys(FIELD_LABELS);
 
 const COMMON_OBJECTS = [
   { label: 'Claim (Main)', value: '' },
+  { label: 'Dealer Account', value: 'Account' },
   { label: 'HQ Claim', value: 'HQClaim__c' },
   { label: 'Financial Order', value: 'FinancialOrder__c' },
   { label: 'Billing Document', value: 'BillingDocument__c' },

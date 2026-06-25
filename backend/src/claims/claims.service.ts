@@ -72,7 +72,7 @@ export class ClaimsService {
       if (q.dateTo) where.submittedDate.lte = new Date(q.dateTo);
     }
 
-    const validSortFields = ['submittedDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo'];
+    const validSortFields = ['submittedDate', 'repairDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo'];
     const sortBy = validSortFields.includes(q.sortBy) ? q.sortBy : 'sfCreatedDate';
     const sortDir = q.sortDir === 'asc' ? 'asc' : 'desc';
 
@@ -90,6 +90,7 @@ export class ClaimsService {
           financialOrders: {
             select: {
               id: true, sfId: true, orderNumber: true, orderType: true, status: true, amount: true, orderDate: true,
+              erpStatus: true, erpErrorMessage: true,
               billingDocuments: {
                 select: { id: true, sfId: true, documentNumber: true, documentType: true, status: true, amount: true, billingDate: true },
               },

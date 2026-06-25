@@ -7,6 +7,7 @@ import { SyncModule } from './sync/sync.module';
 import { ClaimsModule } from './claims/claims.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { VisitorsModule } from './visitors/visitors.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { VisitorsModule } from './visitors/visitors.module';
     ClaimsModule,
     AnalyticsModule,
     VisitorsModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

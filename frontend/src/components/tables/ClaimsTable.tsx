@@ -45,10 +45,12 @@ const COLS = [
   { key: 'modelName', label: 'Model', sortable: true, width: 'w-28' },
   { key: 'serialNumber', label: 'Serial #', sortable: false, width: 'w-32' },
   { key: 'submittedDate', label: 'Submitted', sortable: true, width: 'w-28' },
+  { key: 'repairDate', label: 'Repair Date', sortable: true, width: 'w-28' },
   { key: 'status', label: 'Status', sortable: true, width: 'w-32' },
+  { key: 'assignedTo', label: 'Assigned To', sortable: true, width: 'w-32' },
   { key: 'totalAmount', label: 'Amount', sortable: true, width: 'w-24' },
   { key: 'hqClaim', label: 'HQ Claim', sortable: false, width: 'w-28' },
-  { key: 'financialOrder', label: 'Fin. Order', sortable: false, width: 'w-28' },
+  { key: 'financialOrder', label: 'Fin. Order', sortable: false, width: 'w-36' },
   { key: 'billingDoc', label: 'Billing Doc', sortable: false, width: 'w-28' },
 ];
 
@@ -162,9 +164,21 @@ export default function ClaimsTable({
                       {formatDate(row.submittedDate || row.sfCreatedDate, timezone)}
                     </td>
 
+                    {/* Repair Date */}
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDate(row.repairDate, timezone)}
+                    </td>
+
                     {/* Status */}
                     <td className="px-4 py-3">
                       {row.status ? <Badge label={row.status} /> : <span className="text-text-muted">—</span>}
+                    </td>
+
+                    {/* Assigned To */}
+                    <td className="px-4 py-3">
+                      <span className="text-text-secondary truncate block max-w-[120px]" title={row.assignedTo}>
+                        {row.assignedTo || '—'}
+                      </span>
                     </td>
 
                     {/* Amount */}
@@ -199,16 +213,31 @@ export default function ClaimsTable({
                     {/* Financial Order */}
                     <td className="px-4 py-3">
                       {order ? (
-                        <a
-                          href={order.sfLink || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-text-link hover:underline flex items-center gap-1 text-xs"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <span className="truncate max-w-[100px]">{order.orderNumber || 'View'}</span>
-                          <ExternalLink size={10} className="shrink-0" />
-                        </a>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <a
+                            href={order.sfLink || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-text-link hover:underline flex items-center gap-1 text-xs"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <span className="truncate max-w-[80px]">{order.orderNumber || 'View'}</span>
+                            <ExternalLink size={10} className="shrink-0" />
+                          </a>
+                          {order.erpStatus === 'S' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent-green/15 text-accent-green-light shrink-0">
+                              ERP
+                            </span>
+                          )}
+                          {order.erpStatus === 'E' && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent-red/15 text-accent-red-light shrink-0 cursor-help"
+                              title={order.erpErrorMessage ? String(order.erpErrorMessage).slice(0, 200) : 'ERP transmission error'}
+                            >
+                              ERR
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-text-muted text-xs">—</span>
                       )}

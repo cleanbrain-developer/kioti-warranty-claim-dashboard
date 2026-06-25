@@ -1,15 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { CronJob } from 'cron';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalesforceService } from '../salesforce/salesforce.service';
+import { SettingsService } from '../settings/settings.service';
 
 export interface SyncProgress {
-  phase: 'idle' | 'fetching_claims' | 'syncing_claims' | 'syncing_hq' | 'syncing_orders' | 'syncing_docs' | 'done' | 'error';
+  phase: 'idle' | 'fetching_claims' | 'syncing_claims' | 'syncing_dealers' | 'syncing_hq' | 'syncing_orders' | 'syncing_docs' | 'done' | 'error';
   phaseLabel: string;
   claimsFetched: number;
   claimsSynced: number;
   claimsTotal: number;
+  dealersSynced: number;
   hqSynced: number;
   ordersSynced: number;
   docsSynced: number;
@@ -19,7 +22,7 @@ export interface SyncProgress {
 }
 
 @Injectable()
-export class SyncService {
+export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private isSyncing = false;
 
@@ -29,6 +32,7 @@ export class SyncService {
     claimsFetched: 0,
     claimsSynced: 0,
     claimsTotal: 0,
+    dealersSynced: 0,
     hqSynced: 0,
     ordersSynced: 0,
     docsSynced: 0,
@@ -42,12 +46,33 @@ export class SyncService {
     private prisma: PrismaService,
     private sf: SalesforceService,
     private config: ConfigService,
+    private schedulerRegistry: SchedulerRegistry,
+    private settingsService: SettingsService,
   ) {}
 
-  @Cron('0 1 * * *')
-  async scheduledSync() {
-    this.logger.log('Starting scheduled sync at 1:00 AM');
-    await this.performSync('scheduled');
+  async onModuleInit() {
+    await this.reregisterCronJob();
+  }
+
+  async reregisterCronJob(): Promise<void> {
+    const hour = await this.settingsService.getScheduledSyncHour();
+    const minute = await this.settingsService.getScheduledSyncMinute();
+
+    try {
+      const existing = this.schedulerRegistry.getCronJob('scheduled_sync');
+      existing.stop();
+      this.schedulerRegistry.deleteCronJob('scheduled_sync');
+    } catch {}
+
+    const job = new CronJob(`${minute} ${hour} * * *`, async () => {
+      this.logger.log('Starting scheduled sync');
+      const mode = await this.settingsService.getScheduledSyncMode();
+      await this.performSync('scheduled', mode === 'full');
+    });
+
+    this.schedulerRegistry.addCronJob('scheduled_sync', job);
+    job.start();
+    this.logger.log(`Scheduled sync cron: ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} daily`);
   }
 
   async manualSync(password: string, force = false): Promise<{ success: boolean; message: string }> {
@@ -60,6 +85,32 @@ export class SyncService {
     }
     this.performSync('manual', force).catch(err => this.logger.error('Manual sync failed', err));
     return { success: true, message: force ? 'Full sync started (re-syncing all records)' : 'Sync started' };
+  }
+
+  async getSettingsData() {
+    const all = await this.settingsService.getAll();
+    const hour = parseInt(all.scheduledSyncHour || '1', 10);
+    const minute = parseInt(all.scheduledSyncMinute || '0', 10);
+    const nextRun = this.settingsService.getNextRun(hour, minute);
+
+    const lastScheduledSync = await this.prisma.syncLog.findFirst({
+      where: { syncType: 'scheduled', status: 'success' },
+      orderBy: { completedAt: 'desc' },
+    });
+
+    return {
+      ...all,
+      nextRun: nextRun.toISOString(),
+      lastScheduledSync: lastScheduledSync?.completedAt ?? null,
+    };
+  }
+
+  async updateSettingsData(data: Record<string, string>) {
+    const allowed = ['scheduledSyncMode', 'scheduledSyncHour', 'scheduledSyncMinute'];
+    const filtered = Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)));
+    await this.settingsService.setMany(filtered);
+    await this.reregisterCronJob();
+    return this.getSettingsData();
   }
 
   async describeObjectFields(objectName?: string): Promise<{ name: string; label: string; type: string; referenceTo?: string[] }[]> {
@@ -99,11 +150,7 @@ export class SyncService {
     return this.progress;
   }
 
-  async getStatus(): Promise<{
-    isSyncing: boolean;
-    lastSync: any;
-    recentLogs: any[];
-  }> {
+  async getStatus(): Promise<{ isSyncing: boolean; lastSync: any; recentLogs: any[] }> {
     const [lastSuccess, recent] = await Promise.all([
       this.prisma.syncLog.findFirst({
         where: { status: 'success' },
@@ -114,7 +161,6 @@ export class SyncService {
         take: 10,
       }),
     ]);
-
     return { isSyncing: this.isSyncing, lastSync: lastSuccess, recentLogs: recent };
   }
 
@@ -138,6 +184,7 @@ export class SyncService {
       claimsFetched: 0,
       claimsSynced: 0,
       claimsTotal: 0,
+      dealersSynced: 0,
       hqSynced: 0,
       ordersSynced: 0,
       docsSynced: 0,
@@ -152,12 +199,12 @@ export class SyncService {
     });
 
     let claimsSynced = 0;
+    let dealersSynced = 0;
     let hqClaimsSynced = 0;
     let ordersSynced = 0;
     let docsSynced = 0;
 
     try {
-      // Determine incremental sync date (any successful sync type)
       const lastSuccessLog = await this.prisma.syncLog.findFirst({
         where: { status: 'success' },
         orderBy: { completedAt: 'desc' },
@@ -166,7 +213,7 @@ export class SyncService {
 
       this.logger.log(`Syncing claims ${lastSyncDate ? `since ${lastSyncDate.toISOString()}` : '(full sync)'}`);
 
-      // ── 1. Fetch Warranty Claims from Salesforce ──────────
+      // ── 1. Fetch Warranty Claims ──────────────────────────
       this.setPhase('fetching_claims', lastSyncDate
         ? `Fetching claims modified since ${lastSyncDate.toLocaleDateString('en-US')}…`
         : 'Fetching all warranty claims from Salesforce…');
@@ -180,10 +227,12 @@ export class SyncService {
       this.setPhase('syncing_claims', `Syncing ${claimsRaw.length.toLocaleString()} claims to database…`);
 
       const claimSfIds: string[] = [];
+      const dealerAccountIds = new Set<string>();
 
       for (const raw of claimsRaw) {
         const mapped = this.sf.mapClaim(raw);
         claimSfIds.push(raw.Id);
+        if (mapped.dealerAccountId) dealerAccountIds.add(mapped.dealerAccountId);
 
         await this.prisma.warrantyClaim.upsert({
           where: { sfId: mapped.sfId },
@@ -234,6 +283,35 @@ export class SyncService {
         });
         claimsSynced++;
         this.progress.claimsSynced = claimsSynced;
+      }
+
+      // ── 2.5. Sync Dealer Accounts ─────────────────────────
+      const dealerIds = [...dealerAccountIds];
+      if (dealerIds.length) {
+        this.setPhase('syncing_dealers', `Syncing ${dealerIds.length} dealer accounts…`);
+        const accountsRaw = await this.sf.getDealerAccounts(dealerIds);
+        for (const r of accountsRaw) {
+          await this.prisma.dealerAccount.upsert({
+            where: { sfId: r.Id },
+            update: {
+              name: r.Name ?? null,
+              phone: r.Phone ?? null,
+              city: r.BillingCity ?? null,
+              state: r.BillingState ?? null,
+              rawData: r,
+            },
+            create: {
+              sfId: r.Id,
+              name: r.Name ?? null,
+              phone: r.Phone ?? null,
+              city: r.BillingCity ?? null,
+              state: r.BillingState ?? null,
+              rawData: r,
+            },
+          });
+          dealersSynced++;
+          this.progress.dealersSynced = dealersSynced;
+        }
       }
 
       // ── 3. Sync HQ Claims ────────────────────────────────
@@ -302,6 +380,8 @@ export class SyncService {
               status: r.Status__c ?? null,
               amount: r.Amount__c ? Number(r.Amount__c) : null,
               orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
+              erpStatus: r._erpStatus ?? null,
+              erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
               sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
               rawData: r,
             },
@@ -313,6 +393,8 @@ export class SyncService {
               status: r.Status__c ?? null,
               amount: r.Amount__c ? Number(r.Amount__c) : null,
               orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
+              erpStatus: r._erpStatus ?? null,
+              erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
               sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
               rawData: r,
             },
@@ -370,13 +452,14 @@ export class SyncService {
           hqClaimsSynced,
           ordersSynced,
           docsSynced,
+          dealersSynced,
           completedAt: new Date(),
         },
       });
 
       this.setPhase('done', 'Sync completed successfully');
       this.logger.log(
-        `Sync completed: ${claimsSynced} claims, ${hqClaimsSynced} HQ claims, ${ordersSynced} orders, ${docsSynced} billing docs`,
+        `Sync completed: ${claimsSynced} claims, ${dealersSynced} dealers, ${hqClaimsSynced} HQ, ${ordersSynced} orders, ${docsSynced} docs`,
       );
     } catch (err) {
       this.logger.error(`Sync failed: ${err.message}`, err.stack);

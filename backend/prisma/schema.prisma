@@ -67,10 +67,12 @@ model FinancialOrder {
   orderNumber   String?   @map("order_number")
   orderType     String?   @map("order_type")
   status        String?
-  amount        Decimal?  @db.Decimal(15, 2)
-  orderDate     DateTime? @map("order_date")
-  sfCreatedDate DateTime? @map("sf_created_date")
-  rawData       Json?     @map("raw_data")
+  amount          Decimal?  @db.Decimal(15, 2)
+  orderDate       DateTime? @map("order_date")
+  erpStatus       String?   @map("erp_status")
+  erpErrorMessage String?   @map("erp_error_message")
+  sfCreatedDate   DateTime? @map("sf_created_date")
+  rawData         Json?     @map("raw_data")
 
   claim            WarrantyClaim     @relation(fields: [claimId], references: [id])
   billingDocuments BillingDocument[]
@@ -101,6 +103,29 @@ model BillingDocument {
   @@map("billing_documents")
 }
 
+model DealerAccount {
+  id       String  @id @default(cuid())
+  sfId     String  @unique @map("sf_id")
+  name     String?
+  phone    String?
+  city     String?
+  state    String?
+  rawData  Json?   @map("raw_data")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dealer_accounts")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
 model SyncLog {
   id             String    @id @default(cuid())
   syncType       String    @map("sync_type")
@@ -109,6 +134,7 @@ model SyncLog {
   hqClaimsSynced Int?      @map("hq_claims_synced")
   ordersSynced   Int?      @map("orders_synced")
   docsSynced     Int?      @map("docs_synced")
+  dealersSynced  Int?      @map("dealers_synced")
   errorMessage   String?   @map("error_message")
   startedAt      DateTime  @map("started_at")
   completedAt    DateTime? @map("completed_at")

@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart2, List, Clock } from 'lucide-react';
+import { BarChart2, List, Clock, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const tabs = [
   { path: '/', label: 'Insights', icon: BarChart2 },
   { path: '/claims', label: 'Claims', icon: List },
   { path: '/aging', label: 'Aging', icon: Clock },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function Navigation() {

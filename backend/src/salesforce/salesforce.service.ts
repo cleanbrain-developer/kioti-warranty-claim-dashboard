@@ -202,6 +202,7 @@ export class SalesforceService {
   // ── Relationship Field Discovery ────────────────────────
 
   private relationshipCache = new Map<string, string | null>();
+  private erpFieldCache = new Map<string, { status: string | null; error: string | null }>();
 
   /**
    * Uses describe API to find the lookup field on childObject that references parentObject.
@@ -251,6 +252,56 @@ export class SalesforceService {
       }
     }
     return '';
+  }
+
+  async discoverERPFields(objectName: string): Promise<{ status: string | null; error: string | null }> {
+    if (this.erpFieldCache.has(objectName)) return this.erpFieldCache.get(objectName);
+    try {
+      const desc = await this.describe(objectName);
+      const names = desc.fields.map(f => f.name);
+      const lower = names.map(n => n.toLowerCase());
+
+      const findField = (patterns: string[]): string | null => {
+        for (const p of patterns) {
+          const idx = lower.indexOf(p.toLowerCase());
+          if (idx !== -1) return names[idx];
+        }
+        return null;
+      };
+
+      const result = {
+        status: findField(['ERPStatus__c', 'ERP_Status__c', 'SendStatus__c', 'ERPSendStatus__c', 'EDIStatus__c', 'IntegrationStatus__c', 'ERPTransferStatus__c']),
+        error:  findField(['ERPErrorMessage__c', 'ERP_Error_Message__c', 'SendErrorMessage__c', 'ERPError__c', 'EDIErrorMessage__c', 'IntegrationErrorMessage__c']),
+      };
+      this.erpFieldCache.set(objectName, result);
+      if (result.status) this.logger.log(`[ERP] ${objectName}: status=${result.status}, error=${result.error}`);
+      return result;
+    } catch {
+      const result = { status: null, error: null };
+      this.erpFieldCache.set(objectName, result);
+      return result;
+    }
+  }
+
+  async getDealerAccounts(accountIds: string[]): Promise<any[]> {
+    if (!accountIds.length) return [];
+    const all: any[] = [];
+    for (let i = 0; i < accountIds.length; i += 200) {
+      const batch = accountIds.slice(i, i + 200);
+      const ids = batch.map(id => `'${id}'`).join(', ');
+      try {
+        const rows = await this.query(`SELECT Id, Name, Phone, BillingStreet, BillingCity, BillingState, BillingPostalCode FROM Account WHERE Id IN (${ids})`);
+        all.push(...rows);
+      } catch {
+        try {
+          const rows = await this.query(`SELECT Id, Name FROM Account WHERE Id IN (${ids})`);
+          all.push(...rows);
+        } catch (err) {
+          this.logger.warn(`getDealerAccounts batch failed: ${err.message}`);
+        }
+      }
+    }
+    return all;
   }
 
   // ── Claim Queries ───────────────────────────────────────
@@ -370,14 +421,18 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields (once)
+    // Step 2: discover available detail fields (once) + ERP fields
+    const erpFields = await this.discoverERPFields(this.financialOrderObject);
+    const erpStr = [erpFields.status, erpFields.error].filter(Boolean).join(', ');
+
     const workingDetails = await this.discoverWorkingFields(
       this.financialOrderObject,
       ['Id', 'Name', parentField, 'CreatedDate'],
       ['Type__c, Status__c, Amount__c, OrderDate__c', 'Status__c, Amount__c', ''],
     );
 
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
+    const detailParts = [workingDetails, erpStr].filter(Boolean).join(', ');
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(detailParts ? [detailParts] : [])].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
@@ -386,7 +441,12 @@ export class SalesforceService {
       const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
         const rows = await this.query(`SELECT ${allFields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`);
-        results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+        results.push(...rows.map(r => ({
+          ...r,
+          _claimSfId: r[parentField],
+          _erpStatus: erpFields.status ? (r[erpFields.status] ?? null) : null,
+          _erpErrorMessage: erpFields.error ? (r[erpFields.error] ?? null) : null,
+        })));
       } catch (err) {
         this.logger.warn(`[FinancialOrder] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }

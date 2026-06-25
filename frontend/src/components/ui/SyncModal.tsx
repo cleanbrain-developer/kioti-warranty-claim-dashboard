@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Lock, CheckCircle, XCircle, X, Database, FileText, Building2, CreditCard, Receipt } from 'lucide-react';
+import { RefreshCw, Lock, CheckCircle, XCircle, X, Database, FileText, Building2, CreditCard, Receipt, Zap, AlertTriangle, Users } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { format } from 'date-fns';
@@ -19,24 +19,22 @@ function formatElapsed(seconds: number): string {
 }
 
 const PHASE_META: Record<string, { icon: React.ReactNode; color: string }> = {
-  fetching_claims: { icon: <FileText size={14} />, color: 'text-accent-blue' },
-  syncing_claims:  { icon: <Database size={14} />, color: 'text-accent-blue-light' },
-  syncing_hq:      { icon: <Building2 size={14} />, color: 'text-accent-purple-light' },
-  syncing_orders:  { icon: <CreditCard size={14} />, color: 'text-accent-green-light' },
-  syncing_docs:    { icon: <Receipt size={14} />, color: 'text-accent-orange-light' },
+  fetching_claims: { icon: <FileText size={14} />,    color: 'text-accent-blue' },
+  syncing_claims:  { icon: <Database size={14} />,    color: 'text-accent-blue-light' },
+  syncing_dealers: { icon: <Users size={14} />,       color: 'text-accent-green' },
+  syncing_hq:      { icon: <Building2 size={14} />,   color: 'text-accent-purple-light' },
+  syncing_orders:  { icon: <CreditCard size={14} />,  color: 'text-accent-green-light' },
+  syncing_docs:    { icon: <Receipt size={14} />,     color: 'text-accent-orange-light' },
   done:            { icon: <CheckCircle size={14} />, color: 'text-accent-green-light' },
-  error:           { icon: <XCircle size={14} />, color: 'text-accent-red-light' },
-  idle:            { icon: <RefreshCw size={14} />, color: 'text-text-muted' },
+  error:           { icon: <XCircle size={14} />,     color: 'text-accent-red-light' },
+  idle:            { icon: <RefreshCw size={14} />,   color: 'text-text-muted' },
 };
 
 function ProgressBar({ value, total, color = 'bg-accent-blue' }: { value: number; total: number; color?: string }) {
   const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
   return (
     <div className="w-full bg-bg-elevated rounded-full h-1.5 overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all duration-300 ${color}`}
-        style={{ width: `${pct}%` }}
-      />
+      <div className={`h-full rounded-full transition-all duration-300 ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -113,6 +111,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   const showProgress = isSyncing && phase !== 'idle';
   const isDone = phase === 'done';
   const isError = phase === 'error';
+  const showPanel = showProgress || isDone || isError;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -124,6 +123,15 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
           <div className="flex items-center gap-2">
             <RefreshCw size={18} className={isSyncing ? 'text-accent-blue animate-spin' : 'text-accent-blue'} />
             <h2 className="text-text-primary font-semibold text-base">Manual Sync</h2>
+            {(showProgress || isDone) && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                isDone ? 'bg-accent-green/15 text-accent-green-light' :
+                isError ? 'bg-accent-red/15 text-accent-red-light' :
+                  forceFullSync ? 'bg-accent-orange/15 text-accent-orange-light' : 'bg-accent-blue/15 text-accent-blue-light'
+              }`}>
+                {isDone ? 'Complete' : isError ? 'Error' : forceFullSync ? 'Full Sync' : 'Incremental'}
+              </span>
+            )}
           </div>
           <button onClick={handleClose} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
             <X size={16} />
@@ -134,7 +142,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
         <div className="px-6 py-5 space-y-4">
 
           {/* Last sync info */}
-          {lastSync && !showProgress && (
+          {lastSync && !showPanel && (
             <div className="bg-bg-elevated rounded-lg p-3 text-sm space-y-1">
               <div className="text-text-muted text-xs font-medium uppercase tracking-wide">Last Sync</div>
               <div className="text-text-secondary">
@@ -142,6 +150,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
               </div>
               <div className="flex gap-4 text-xs text-text-muted pt-1">
                 <span><span className="text-text-secondary">{lastSync.claimsSynced ?? 0}</span> claims</span>
+                <span><span className="text-text-secondary">{lastSync.dealersSynced ?? 0}</span> dealers</span>
                 <span><span className="text-text-secondary">{lastSync.hqClaimsSynced ?? 0}</span> HQ</span>
                 <span><span className="text-text-secondary">{lastSync.ordersSynced ?? 0}</span> orders</span>
                 <span><span className="text-text-secondary">{lastSync.docsSynced ?? 0}</span> docs</span>
@@ -149,48 +158,72 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
             </div>
           )}
 
-          {/* Sync mode toggle */}
-          {!showProgress && !isDone && !isError && (
-            <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-bg-elevated/50">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-medium text-text-primary">
-                    {forceFullSync ? 'Full Re-sync' : 'Incremental Sync'}
-                  </span>
-                  {!forceFullSync && lastSync && (
-                    <span className="text-xs text-text-muted">
-                      (since {format(new Date(lastSync.completedAt), 'MMM d, h:mm a')})
+          {/* Mode selector (two cards) */}
+          {!showPanel && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Sync Mode</p>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Incremental */}
+                <button
+                  type="button"
+                  onClick={() => setForceFullSync(false)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    !forceFullSync
+                      ? 'border-accent-blue/50 bg-accent-blue/10 ring-1 ring-accent-blue/30'
+                      : 'border-border bg-bg-elevated/40 hover:border-border-emphasis'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap size={12} className={!forceFullSync ? 'text-accent-blue-light' : 'text-text-muted'} />
+                    <span className={`text-xs font-semibold ${!forceFullSync ? 'text-accent-blue-light' : 'text-text-muted'}`}>
+                      Incremental
                     </span>
-                  )}
-                </div>
-                <p className="text-xs text-text-muted leading-relaxed">
-                  {forceFullSync
-                    ? 'Re-syncs all records regardless of modification date. Use when data is missing or after field mapping reset.'
-                    : 'Only fetches records modified since the last sync. Faster, but skips older missing data.'}
-                </p>
+                    {!forceFullSync && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent-blue shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-snug">
+                    {lastSync
+                      ? `Since ${format(new Date(lastSync.completedAt), 'MMM d, h:mm a')}`
+                      : 'Recently modified records only'}
+                  </p>
+                </button>
+
+                {/* Full Re-sync */}
+                <button
+                  type="button"
+                  onClick={() => setForceFullSync(true)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    forceFullSync
+                      ? 'border-accent-orange/50 bg-accent-orange/10 ring-1 ring-accent-orange/30'
+                      : 'border-border bg-bg-elevated/40 hover:border-border-emphasis'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <RefreshCw size={12} className={forceFullSync ? 'text-accent-orange-light' : 'text-text-muted'} />
+                    <span className={`text-xs font-semibold ${forceFullSync ? 'text-accent-orange-light' : 'text-text-muted'}`}>
+                      Full Re-sync
+                    </span>
+                    {forceFullSync && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-snug">All records · Ignores last sync date</p>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setForceFullSync(v => !v)}
-                className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${
-                  forceFullSync ? 'bg-accent-orange' : 'bg-bg-hover'
-                }`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  forceFullSync ? 'translate-x-4' : 'translate-x-0.5'
-                }`} />
-              </button>
+
+              {forceFullSync && (
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-accent-orange/10 border border-accent-orange/20 text-[11px] text-accent-orange-light leading-relaxed">
+                  <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                  Re-fetches all records from Salesforce — Claims, Dealers, HQ Claims, Financial Orders, Billing Documents. May take several minutes.
+                </div>
+              )}
             </div>
           )}
 
           {/* Real-time progress panel */}
-          {(showProgress || isDone || isError) && progress && (
+          {showPanel && progress && (
             <div className={`rounded-xl border p-4 space-y-1 ${
               isError ? 'border-accent-red/30 bg-accent-red/5' :
               isDone  ? 'border-accent-green/30 bg-accent-green/5' :
                         'border-accent-blue/20 bg-accent-blue/5'
             }`}>
-              {/* Phase header */}
               <div className="flex items-center justify-between mb-3">
                 <div className={`flex items-center gap-2 text-sm font-medium ${phaseMeta.color}`}>
                   {phaseMeta.icon}
@@ -203,50 +236,19 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
                 )}
               </div>
 
-              {/* Progress rows */}
               <div className="divide-y divide-border/50">
-                <ProgressRow
-                  icon={<FileText size={13} />}
-                  label="Claims fetched from Salesforce"
-                  value={progress.claimsFetched}
-                  color="text-accent-blue"
-                  active={phase === 'fetching_claims'}
-                />
-                <ProgressRow
-                  icon={<Database size={13} />}
-                  label="Claims saved to database"
-                  value={progress.claimsSynced}
-                  total={progress.claimsTotal}
-                  color="text-accent-blue-light"
-                  active={phase === 'syncing_claims'}
-                />
-                <ProgressRow
-                  icon={<Building2 size={13} />}
-                  label="HQ Claims synced"
-                  value={progress.hqSynced}
-                  color="text-accent-purple-light"
-                  active={phase === 'syncing_hq'}
-                />
-                <ProgressRow
-                  icon={<CreditCard size={13} />}
-                  label="Financial Orders synced"
-                  value={progress.ordersSynced}
-                  color="text-accent-green-light"
-                  active={phase === 'syncing_orders'}
-                />
-                <ProgressRow
-                  icon={<Receipt size={13} />}
-                  label="Billing Documents synced"
-                  value={progress.docsSynced}
-                  color="text-accent-orange-light"
-                  active={phase === 'syncing_docs'}
-                />
+                <ProgressRow icon={<FileText size={13} />}   label="Claims fetched from Salesforce" value={progress.claimsFetched} color="text-accent-blue"           active={phase === 'fetching_claims'} />
+                <ProgressRow icon={<Database size={13} />}   label="Claims saved to database"       value={progress.claimsSynced}  total={progress.claimsTotal}   color="text-accent-blue-light"      active={phase === 'syncing_claims'} />
+                <ProgressRow icon={<Users size={13} />}      label="Dealer accounts synced"         value={progress.dealersSynced} color="text-accent-green"          active={phase === 'syncing_dealers'} />
+                <ProgressRow icon={<Building2 size={13} />}  label="HQ Claims synced"               value={progress.hqSynced}      color="text-accent-purple-light"   active={phase === 'syncing_hq'} />
+                <ProgressRow icon={<CreditCard size={13} />} label="Financial Orders synced"        value={progress.ordersSynced}  color="text-accent-green-light"    active={phase === 'syncing_orders'} />
+                <ProgressRow icon={<Receipt size={13} />}    label="Billing Documents synced"       value={progress.docsSynced}    color="text-accent-orange-light"   active={phase === 'syncing_docs'} />
               </div>
             </div>
           )}
 
-          {/* Result message (after trigger) */}
-          {result && !isSyncing && (
+          {/* Error message (when no progress panel) */}
+          {result && !isSyncing && !isDone && !isError && (
             <div className={`flex items-center gap-3 p-3 rounded-lg ${
               result.success
                 ? 'bg-accent-green/10 border border-accent-green/20'
@@ -254,8 +256,7 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
             }`}>
               {result.success
                 ? <CheckCircle size={16} className="text-accent-green-light shrink-0" />
-                : <XCircle size={16} className="text-accent-red-light shrink-0" />
-              }
+                : <XCircle size={16} className="text-accent-red-light shrink-0" />}
               <span className={`text-sm ${result.success ? 'text-accent-green-light' : 'text-accent-red-light'}`}>
                 {result.message}
               </span>
@@ -280,7 +281,6 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
                   disabled={mutation.isPending}
                 />
               </div>
-
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={handleClose} className="btn-secondary flex-1">
                   Cancel
@@ -298,21 +298,16 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
                     ? <><RefreshCw size={14} className="animate-spin" /> Starting…</>
                     : forceFullSync
                       ? <><RefreshCw size={14} /> Full Re-sync</>
-                      : <><RefreshCw size={14} /> Sync Now</>
-                  }
+                      : <><Zap size={14} /> Incremental Sync</>}
                 </button>
               </div>
             </form>
           )}
 
-          {/* Close button after done */}
+          {/* Close after done/error */}
           {(isDone || isError) && !isSyncing && (
-            <button onClick={handleClose} className="btn-secondary w-full mt-2">
-              Close
-            </button>
+            <button onClick={handleClose} className="btn-secondary w-full mt-2">Close</button>
           )}
-
-          {/* Close button while syncing */}
           {isSyncing && (
             <button onClick={handleClose} className="btn-ghost w-full text-xs text-text-muted">
               Hide (sync continues in background)

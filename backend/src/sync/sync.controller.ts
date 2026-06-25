@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Query } from '@nestjs/common';
 import { SyncService } from './sync.service';
 
 @Controller('sync')
@@ -33,5 +33,15 @@ export class SyncController {
   @Post('reset-field-mappings')
   async resetFieldMappings() {
     return this.syncService.resetFieldMappings();
+  }
+
+  @Get('settings')
+  async getSettings() {
+    return this.syncService.getSettingsData();
+  }
+
+  @Patch('settings')
+  async updateSettings(@Body() body: Record<string, string>) {
+    return this.syncService.updateSettingsData(body);
   }
 }

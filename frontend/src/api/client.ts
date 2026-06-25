@@ -51,6 +51,14 @@ export const api = {
       method: 'POST',
     }),
 
+  // Settings
+  getSettings: () => request<any>('/sync/settings'),
+  updateSettings: (data: Record<string, string>) =>
+    request<any>('/sync/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
   // Visitors
   trackVisit: (sessionId: string) =>
     request<{ success: boolean }>('/visitors/track', {
