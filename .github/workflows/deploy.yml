@@ -23,7 +23,8 @@ jobs:
             set -e
             cd /opt/kioti-warranty-claim-dashboard
             echo "▶ Pulling latest code..."
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             echo "▶ Removing orphaned containers..."
             docker compose down --remove-orphans 2>/dev/null || true
             echo "▶ Rebuilding and restarting containers..."
