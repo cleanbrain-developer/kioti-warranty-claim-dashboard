@@ -18,6 +18,7 @@ export class ClaimsController {
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
       hasHQProduct: query.hasHQProduct,
+      openOnly: query.openOnly,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
     });

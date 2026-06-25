@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore';
 
 const DEFAULTS = {
   search: '', status: '', dealer: '', model: '', assignee: '',
-  dateFrom: '', dateTo: '', hasHQProduct: '', limit: 20,
+  dateFrom: '', dateTo: '', hasHQProduct: '', openOnly: '', limit: 20,
 };
 
 export default function ClaimsPage() {
@@ -26,6 +26,7 @@ export default function ClaimsPage() {
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
+    openOnly: getParam('openOnly'),
     limit: parseInt(getParam('limit', '20')),
   });
 
@@ -47,6 +48,7 @@ export default function ClaimsPage() {
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
+    openOnly: getParam('openOnly'),
     sortBy,
     sortDir,
   };
@@ -63,12 +65,15 @@ export default function ClaimsPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // Sync staged assignee from URL when navigating from Insights chart
+  // Sync staged filters from URL when navigating from Insights chart
   React.useEffect(() => {
     const urlAssignee = getParam('assignee');
-    if (urlAssignee && urlAssignee !== staged.assignee) {
-      setStaged(s => ({ ...s, assignee: urlAssignee }));
-    }
+    const urlOpenOnly = getParam('openOnly');
+    setStaged(s => ({
+      ...s,
+      ...(urlAssignee !== undefined ? { assignee: urlAssignee } : {}),
+      ...(urlOpenOnly !== undefined ? { openOnly: urlOpenOnly } : {}),
+    }));
   }, [searchParams]);
 
   // Merge infinite scroll rows
@@ -96,6 +101,7 @@ export default function ClaimsPage() {
     if (staged.dateFrom) params.dateFrom = staged.dateFrom;
     if (staged.dateTo) params.dateTo = staged.dateTo;
     if (staged.hasHQProduct) params.hasHQProduct = staged.hasHQProduct;
+    if (staged.openOnly) params.openOnly = staged.openOnly;
     if (staged.limit !== 20) params.limit = String(staged.limit);
     params.sortBy = sortBy;
     params.sortDir = sortDir;

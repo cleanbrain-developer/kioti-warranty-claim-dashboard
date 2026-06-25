@@ -37,7 +37,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
     );
   }
 
-  const sorted = [...data].sort((a, b) => b.open - a.open).slice(0, 20);
+  const sorted = [...data].sort((a, b) => a.open - b.open).slice(0, 20);
   const names = sorted.map(d => d.assignee);
   const openValues = sorted.map(d => d.open);
 
@@ -111,7 +111,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
   const handleClick = (params: any) => {
     const assignee = names[params.dataIndex];
     if (assignee && assignee !== 'Unassigned') {
-      navigate(`/claims?assignee=${encodeURIComponent(assignee)}`);
+      navigate(`/claims?assignee=${encodeURIComponent(assignee)}&openOnly=true`);
     }
   };
 
@@ -124,7 +124,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
         onEvents={{ click: handleClick }}
       />
       <p className="text-center text-xs text-text-muted mt-1">
-        Click a bar to filter Claims by assignee · Bar shows open claim count
+        Click a bar to view open claims by assignee
       </p>
     </div>
   );

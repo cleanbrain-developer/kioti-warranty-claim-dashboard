@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, SlidersHorizontal, X, List, AlignJustify, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import DatePicker from '../ui/DatePicker';
 
 interface FilterValues {
   search: string;
@@ -11,6 +12,7 @@ interface FilterValues {
   dateFrom: string;
   dateTo: string;
   hasHQProduct: string;
+  openOnly: string;
   limit: number;
 }
 
@@ -29,7 +31,8 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
 
   const hasActiveFilters = !!(
     filters.search || filters.status || filters.dealer ||
-    filters.model || filters.assignee || filters.dateFrom || filters.dateTo || filters.hasHQProduct
+    filters.model || filters.assignee || filters.dateFrom || filters.dateTo ||
+    filters.hasHQProduct || filters.openOnly
   );
 
   return (
@@ -151,27 +154,13 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
             {/* Date From */}
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-text-muted pl-0.5">From</span>
-              <input
-                type="text"
-                value={filters.dateFrom}
-                onChange={e => onChange({ dateFrom: e.target.value })}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                className="input text-sm"
-              />
+              <DatePicker value={filters.dateFrom} onChange={v => onChange({ dateFrom: v })} />
             </div>
 
             {/* Date To */}
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-text-muted pl-0.5">To</span>
-              <input
-                type="text"
-                value={filters.dateTo}
-                onChange={e => onChange({ dateTo: e.target.value })}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                className="input text-sm"
-              />
+              <DatePicker value={filters.dateTo} onChange={v => onChange({ dateTo: v })} />
             </div>
           </div>
 
@@ -186,6 +175,18 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
                 />
                 <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
                   HQ Claims Only
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={filters.openOnly === 'true'}
+                  onChange={e => onChange({ openOnly: e.target.checked ? 'true' : '' })}
+                  className="w-3.5 h-3.5 rounded accent-accent-blue cursor-pointer"
+                />
+                <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+                  Open Claims Only
                 </span>
               </label>
 

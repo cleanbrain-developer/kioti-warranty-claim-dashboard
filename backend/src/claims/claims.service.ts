@@ -13,6 +13,7 @@ export interface ClaimsQuery {
   dateFrom?: string;
   dateTo?: string;
   hasHQProduct?: string;
+  openOnly?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
 }
@@ -54,6 +55,16 @@ export class ClaimsService {
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
     if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };
     if (q.hasHQProduct === 'true') where.hasHQProduct = true;
+
+    if (q.openOnly === 'true') {
+      const closedTerms = ['approved', 'paid', 'rejected', 'closed', 'completed', 'denied', 'cancel'];
+      where.AND = [
+        ...(where.AND || []),
+        ...closedTerms.map(term => ({
+          NOT: { status: { contains: term, mode: 'insensitive' as const } },
+        })),
+      ];
+    }
 
     if (q.dateFrom || q.dateTo) {
       where.submittedDate = {};
