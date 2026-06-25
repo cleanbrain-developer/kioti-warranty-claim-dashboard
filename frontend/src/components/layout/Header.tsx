@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Users, Sun, Moon, Globe } from 'lucide-react';
 import { api } from '../../api/client';
 import { useStore } from '../../store/useStore';
@@ -9,12 +9,23 @@ import SyncModal from '../ui/SyncModal';
 export default function Header() {
   const [syncOpen, setSyncOpen] = useState(false);
   const { timezone, setTimezone, theme, toggleTheme } = useStore();
+  const qc = useQueryClient();
+  const wasSyncing = useRef(false);
 
   const { data: syncStatus } = useQuery({
     queryKey: ['sync', 'status'],
     queryFn: api.getSyncStatus,
     refetchInterval: 5000,
   });
+
+  // Auto-refresh all data when sync completes
+  useEffect(() => {
+    const nowSyncing = !!syncStatus?.isSyncing;
+    if (wasSyncing.current && !nowSyncing) {
+      qc.invalidateQueries();
+    }
+    wasSyncing.current = nowSyncing;
+  }, [syncStatus?.isSyncing, qc]);
 
   const { data: visitors } = useQuery({
     queryKey: ['visitors', 'today'],
