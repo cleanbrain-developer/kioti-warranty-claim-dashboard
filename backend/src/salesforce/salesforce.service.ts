@@ -199,6 +199,60 @@ export class SalesforceService {
     return this.claimFieldMap[key] || null;
   }
 
+  // ── Relationship Field Discovery ────────────────────────
+
+  private relationshipCache = new Map<string, string | null>();
+
+  /**
+   * Uses describe API to find the lookup field on childObject that references parentObject.
+   * Result is cached in memory so describe is only called once per object pair.
+   */
+  async discoverRelationshipField(childObject: string, parentObject: string): Promise<string | null> {
+    const cacheKey = `${childObject}→${parentObject}`;
+    if (this.relationshipCache.has(cacheKey)) return this.relationshipCache.get(cacheKey);
+
+    try {
+      const desc = await this.describe(childObject);
+      const refField = desc.fields.find(f =>
+        f.type === 'reference' &&
+        f.referenceTo?.some(r => r.toLowerCase() === parentObject.toLowerCase()),
+      );
+      const result = refField?.name || null;
+      this.relationshipCache.set(cacheKey, result);
+      if (result) {
+        this.logger.log(`[Describe] ${childObject} → ${parentObject} via: ${result}`);
+      } else {
+        this.logger.warn(`[Describe] No reference field found: ${childObject} → ${parentObject}`);
+      }
+      return result;
+    } catch (err) {
+      this.logger.warn(`[Describe] Failed to describe ${childObject}: ${err.message}`);
+      this.relationshipCache.set(cacheKey, null);
+      return null;
+    }
+  }
+
+  /**
+   * Tries each detail field set against the object to find one that doesn't throw.
+   * Returns the first working set (or '' if none include extra fields).
+   */
+  private async discoverWorkingFields(
+    objectName: string,
+    fixedFields: string[],
+    fieldSetCandidates: string[],
+  ): Promise<string> {
+    for (const fields of fieldSetCandidates) {
+      try {
+        const allFields = [...fixedFields, ...(fields ? [fields] : [])].join(', ');
+        await this.query(`SELECT ${allFields} FROM ${objectName} LIMIT 1`);
+        return fields;
+      } catch {
+        // Try next
+      }
+    }
+    return '';
+  }
+
   // ── Claim Queries ───────────────────────────────────────
 
   async getWarrantyClaims(lastModifiedDate?: Date): Promise<any[]> {
@@ -252,36 +306,44 @@ export class SalesforceService {
 
   async getHQClaimsWithParent(claimSfIds: string[]): Promise<any[]> {
     if (!claimSfIds.length) return [];
+
+    // Step 1: discover the lookup field (describe-based, cached)
+    let parentField = await this.discoverRelationshipField(this.hqClaimObject, this.claimObject);
+    if (!parentField) {
+      // Fallback: try known candidates with a probe query
+      for (const candidate of ['Claim__c', 'WarrantyClaim__c', 'ClaimId__c', 'ParentClaim__c']) {
+        try {
+          await this.query(`SELECT Id, ${candidate} FROM ${this.hqClaimObject} LIMIT 1`);
+          parentField = candidate;
+          this.logger.log(`[HQClaim] Fallback parent field: ${candidate}`);
+          break;
+        } catch { /* try next */ }
+      }
+    }
+    if (!parentField) {
+      this.logger.warn('[HQClaim] Cannot determine parent field. Skipping HQ Claim sync.');
+      return [];
+    }
+
+    // Step 2: discover available detail fields (once, before batches)
+    const workingDetails = await this.discoverWorkingFields(
+      this.hqClaimObject,
+      ['Id', 'Name', parentField, 'CreatedDate'],
+      ['Status__c, JudgmentResult__c, JudgedDate__c, TotalAmount__c', 'Status__c, TotalAmount__c', ''],
+    );
+
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
-    const parentFields = ['Claim__c', 'ClaimId__c', 'ParentClaim__c', 'WarrantyClaim__c'];
-    // Detail fields to try (degrade gracefully if some don't exist)
-    const detailFieldSets = [
-      'Status__c, JudgmentResult__c, JudgedDate__c, TotalAmount__c',
-      'Status__c, TotalAmount__c',
-      '',
-    ];
-
+    // Step 3: batch-query all claim IDs
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
-      const batch = claimSfIds.slice(i, i + batchSize);
-      const ids = batch.map(id => `'${id}'`).join(', ');
-
-      let synced = false;
-      for (const parentField of parentFields) {
-        if (synced) break;
-        for (const details of detailFieldSets) {
-          try {
-            const fields = ['Id', 'Name', parentField, 'CreatedDate', ...(details ? [details] : [])].join(', ');
-            const soql = `SELECT ${fields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`;
-            const rows = await this.query(soql);
-            results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
-            synced = true;
-            break;
-          } catch {
-            // Try next field set / parent field
-          }
-        }
+      const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
+      try {
+        const rows = await this.query(`SELECT ${allFields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`);
+        results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+      } catch (err) {
+        this.logger.warn(`[HQClaim] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }
     }
     return results;
@@ -289,35 +351,44 @@ export class SalesforceService {
 
   async getFinancialOrders(claimSfIds: string[]): Promise<any[]> {
     if (!claimSfIds.length) return [];
+
+    // Step 1: discover the lookup field from FinancialOrder__c → Claim__c
+    let parentField = await this.discoverRelationshipField(this.financialOrderObject, this.claimObject);
+    if (!parentField) {
+      // Fallback: probe candidates (exclude self-reference FinancialOrder__c)
+      for (const candidate of ['Claim__c', 'WarrantyClaim__c', 'ClaimId__c', 'ServiceClaim__c']) {
+        try {
+          await this.query(`SELECT Id, ${candidate} FROM ${this.financialOrderObject} LIMIT 1`);
+          parentField = candidate;
+          this.logger.log(`[FinancialOrder] Fallback parent field: ${candidate}`);
+          break;
+        } catch { /* try next */ }
+      }
+    }
+    if (!parentField) {
+      this.logger.warn('[FinancialOrder] Cannot determine parent field. Skipping Financial Order sync.');
+      return [];
+    }
+
+    // Step 2: discover available detail fields (once)
+    const workingDetails = await this.discoverWorkingFields(
+      this.financialOrderObject,
+      ['Id', 'Name', parentField, 'CreatedDate'],
+      ['Type__c, Status__c, Amount__c, OrderDate__c', 'Status__c, Amount__c', ''],
+    );
+
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
-    const parentFields = ['Claim__c', 'FinancialOrder__c', 'ClaimId__c', 'WarrantyClaim__c'];
-    const detailFieldSets = [
-      'Type__c, Status__c, Amount__c, OrderDate__c',
-      'Status__c, Amount__c',
-      '',
-    ];
-
+    // Step 3: batch-query all claim IDs
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
-      const batch = claimSfIds.slice(i, i + batchSize);
-      const ids = batch.map(id => `'${id}'`).join(', ');
-
-      let synced = false;
-      for (const parentField of parentFields) {
-        if (synced) break;
-        for (const details of detailFieldSets) {
-          try {
-            const fields = ['Id', 'Name', parentField, 'CreatedDate', ...(details ? [details] : [])].join(', ');
-            const soql = `SELECT ${fields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`;
-            const rows = await this.query(soql);
-            results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
-            synced = true;
-            break;
-          } catch {
-            // Try next
-          }
-        }
+      const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
+      try {
+        const rows = await this.query(`SELECT ${allFields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`);
+        results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+      } catch (err) {
+        this.logger.warn(`[FinancialOrder] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }
     }
     return results;
@@ -325,24 +396,43 @@ export class SalesforceService {
 
   async getBillingDocuments(orderSfIds: string[]): Promise<any[]> {
     if (!orderSfIds.length) return [];
+
+    // Step 1: discover lookup from BillingDocument__c → FinancialOrder__c
+    let parentField = await this.discoverRelationshipField(this.billingDocObject, this.financialOrderObject);
+    if (!parentField) {
+      for (const candidate of ['FinancialOrder__c', 'Order__c', 'OrderId__c']) {
+        try {
+          await this.query(`SELECT Id, ${candidate} FROM ${this.billingDocObject} LIMIT 1`);
+          parentField = candidate;
+          this.logger.log(`[BillingDoc] Fallback parent field: ${candidate}`);
+          break;
+        } catch { /* try next */ }
+      }
+    }
+    if (!parentField) {
+      this.logger.warn('[BillingDoc] Cannot determine parent field. Skipping Billing Document sync.');
+      return [];
+    }
+
+    // Step 2: discover available detail fields (once)
+    const workingDetails = await this.discoverWorkingFields(
+      this.billingDocObject,
+      ['Id', 'Name', parentField, 'CreatedDate'],
+      ['Type__c, Status__c, Amount__c, BillingDate__c', 'Status__c, Amount__c', ''],
+    );
+
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
-    const parentFields = ['FinancialOrder__c', 'OrderId__c', 'Order__c'];
-
+    // Step 3: batch-query
     for (let i = 0; i < orderSfIds.length; i += batchSize) {
-      const batch = orderSfIds.slice(i, i + batchSize);
-      const ids = batch.map(id => `'${id}'`).join(', ');
-
-      for (const parentField of parentFields) {
-        try {
-          const soql = `SELECT Id, Name, ${parentField}, Type__c, Status__c, Amount__c, BillingDate__c, CreatedDate FROM ${this.billingDocObject} WHERE ${parentField} IN (${ids})`;
-          const rows = await this.query(soql);
-          results.push(...rows.map(r => ({ ...r, _orderSfId: r[parentField] })));
-          break;
-        } catch {
-          // Try next
-        }
+      const ids = orderSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
+      try {
+        const rows = await this.query(`SELECT ${allFields} FROM ${this.billingDocObject} WHERE ${parentField} IN (${ids})`);
+        results.push(...rows.map(r => ({ ...r, _orderSfId: r[parentField] })));
+      } catch (err) {
+        this.logger.warn(`[BillingDoc] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }
     }
     return results;

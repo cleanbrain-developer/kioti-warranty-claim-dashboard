@@ -149,24 +149,30 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
             </select>
 
             {/* Date From */}
-            <input
-              type="date"
-              lang="en"
-              value={filters.dateFrom}
-              onChange={e => onChange({ dateFrom: e.target.value })}
-              className="input text-sm"
-              placeholder="From"
-            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-text-muted pl-0.5">From</span>
+              <input
+                type="text"
+                value={filters.dateFrom}
+                onChange={e => onChange({ dateFrom: e.target.value })}
+                placeholder="YYYY-MM-DD"
+                maxLength={10}
+                className="input text-sm"
+              />
+            </div>
 
             {/* Date To */}
-            <input
-              type="date"
-              lang="en"
-              value={filters.dateTo}
-              onChange={e => onChange({ dateTo: e.target.value })}
-              className="input text-sm"
-              placeholder="To"
-            />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-text-muted pl-0.5">To</span>
+              <input
+                type="text"
+                value={filters.dateTo}
+                onChange={e => onChange({ dateTo: e.target.value })}
+                placeholder="YYYY-MM-DD"
+                maxLength={10}
+                className="input text-sm"
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between">

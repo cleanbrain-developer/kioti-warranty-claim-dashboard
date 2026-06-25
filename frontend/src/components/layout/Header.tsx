@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Users, Sun, Moon, Globe } from 'lucide-react';
+import { RefreshCw, Users, Sun, Moon, Globe, Database } from 'lucide-react';
 import { api } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { TIMEZONE_OPTIONS } from '../../types';
 import SyncModal from '../ui/SyncModal';
+import FieldMappingModal from '../ui/FieldMappingModal';
 
 export default function Header() {
   const [syncOpen, setSyncOpen] = useState(false);
+  const [fieldMappingOpen, setFieldMappingOpen] = useState(false);
   const { timezone, setTimezone, theme, toggleTheme } = useStore();
   const qc = useQueryClient();
   const wasSyncing = useRef(false);
@@ -95,6 +97,15 @@ export default function Header() {
               <span className="text-text-secondary">{lastSyncLabel}</span>
             </div>
 
+            {/* Field mapping button */}
+            <button
+              onClick={() => setFieldMappingOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-secondary transition-colors"
+              title="Field Mapping"
+            >
+              <Database size={15} />
+            </button>
+
             {/* Sync button */}
             <button
               onClick={() => setSyncOpen(true)}
@@ -136,6 +147,11 @@ export default function Header() {
         onClose={() => setSyncOpen(false)}
         isSyncing={syncStatus?.isSyncing || false}
         lastSync={syncStatus?.lastSync}
+      />
+
+      <FieldMappingModal
+        open={fieldMappingOpen}
+        onClose={() => setFieldMappingOpen(false)}
       />
     </>
   );

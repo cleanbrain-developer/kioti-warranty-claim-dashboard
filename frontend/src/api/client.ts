@@ -34,13 +34,22 @@ export const api = {
   getAging: () => request<any>('/analytics/aging'),
 
   // Sync
-  triggerSync: (password: string) =>
+  triggerSync: (password: string, force = false) =>
     request<{ success: boolean; message: string }>('/sync/manual', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, force }),
     }),
   getSyncStatus: () => request<any>('/sync/status'),
   getSyncProgress: () => request<any>('/sync/progress'),
+  getFieldMappings: () => request<Record<string, string>>('/sync/field-mappings'),
+  describeFields: (objectName?: string) =>
+    request<{ name: string; label: string; type: string; referenceTo?: string[] }[]>(
+      `/sync/describe-fields${objectName ? `?object=${encodeURIComponent(objectName)}` : ''}`,
+    ),
+  resetFieldMappings: () =>
+    request<{ discovered: Record<string, string>; count: number }>('/sync/reset-field-mappings', {
+      method: 'POST',
+    }),
 
   // Visitors
   trackVisit: (sessionId: string) =>

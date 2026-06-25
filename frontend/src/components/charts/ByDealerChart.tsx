@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
+import { useChartColors } from '../../hooks/useChartColors';
 
 interface Props {
   data: { dealer: string; count: number; amount: number }[];
@@ -8,7 +9,9 @@ interface Props {
   title?: string;
 }
 
-export default function ByDealerChart({ data, loading, title = 'Claims by Dealer' }: Props) {
+export default function ByDealerChart({ data, loading }: Props) {
+  const c = useChartColors();
+
   if (loading) return <SkeletonChart height={340} />;
   if (!data?.length) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">No dealer data available</div>;
@@ -21,10 +24,13 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      className: 'echarts-tooltip-dark',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: c.tooltipText, fontSize: 13 },
       formatter: (params: any[]) => {
         const p = params[0];
-        return `<div style="color:var(--tooltip-color)"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value} claims</div></div>`;
+        return `<div style="color:${c.tooltipText}"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value} claims</div></div>`;
       },
     },
     grid: { left: '2%', right: '8%', top: '2%', bottom: '2%', containLabel: true },
@@ -32,25 +38,24 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
-      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
+      splitLine: { lineStyle: { color: c.gridLine } },
+      axisLabel: { color: c.axisMuted, fontSize: 11 },
     },
     yAxis: {
       type: 'category',
       data: sorted.map(d => d.dealer.length > 22 ? d.dealer.slice(0, 22) + '…' : d.dealer),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: 'var(--text-secondary)', fontSize: 11 },
+      axisLabel: { color: c.axisLabel, fontSize: 11 },
     },
     series: [
       {
         type: 'bar',
-        data: sorted.map((d, i) => ({
+        data: sorted.map(d => ({
           value: d.count,
           itemStyle: {
             color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 1, y2: 0,
+              type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
               colorStops: [
                 { offset: 0, color: '#1f6feb' },
                 { offset: 1, color: '#388bfd' },
@@ -62,7 +67,7 @@ export default function ByDealerChart({ data, loading, title = 'Claims by Dealer
         label: {
           show: true,
           position: 'right',
-          color: 'var(--text-secondary)',
+          color: c.barLabelRight,
           fontSize: 11,
         },
         barMaxWidth: 20,

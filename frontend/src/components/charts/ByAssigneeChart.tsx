@@ -2,6 +2,7 @@ import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonChart } from '../ui/Skeleton';
+import { useChartColors } from '../../hooks/useChartColors';
 
 interface AssigneeRow {
   assignee: string;
@@ -24,6 +25,7 @@ const BAR_COLORS = [
 
 export default function ByAssigneeChart({ data, loading }: Props) {
   const navigate = useNavigate();
+  const c = useChartColors();
 
   if (loading) return <SkeletonChart height={Math.max(280, 30 + 36 * 10)} />;
 
@@ -38,21 +40,23 @@ export default function ByAssigneeChart({ data, loading }: Props) {
   const sorted = [...data].sort((a, b) => b.open - a.open).slice(0, 20);
   const names = sorted.map(d => d.assignee);
   const openValues = sorted.map(d => d.open);
-  const totalValues = sorted.map(d => d.total);
 
   const chartHeight = Math.max(320, 60 + sorted.length * 36);
 
   const option = {
     backgroundColor: 'transparent',
-    grid: { left: 120, right: 70, top: 16, bottom: 24 },
+    grid: { left: 130, right: 60, top: 16, bottom: 24 },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      className: 'echarts-tooltip-dark',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: c.tooltipText, fontSize: 13 },
       formatter: (params: any[]) => {
         const idx = params[0].dataIndex;
         const row = sorted[idx];
-        return `<div style="color:var(--tooltip-color)">
+        return `<div style="color:${c.tooltipText}">
           <div style="font-weight:600;margin-bottom:6px">${row.assignee}</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap">
             <span style="color:#58a6ff">Open: <b>${row.open}</b></span>
@@ -60,22 +64,22 @@ export default function ByAssigneeChart({ data, loading }: Props) {
             <span style="color:#f85149">Rejected: <b>${row.rejected}</b></span>
             <span style="color:#e3b341">Pending: <b>${row.pending}</b></span>
           </div>
-          <div style="margin-top:4px;color:var(--text-secondary)">Total: <b>${row.total}</b></div>
+          <div style="margin-top:4px;color:${c.axisMuted}">Total: <b>${row.total}</b></div>
         </div>`;
       },
     },
     xAxis: {
       type: 'value',
-      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'var(--border-default)', opacity: 0.5 } },
+      axisLabel: { color: c.axisMuted, fontSize: 11 },
+      splitLine: { lineStyle: { color: c.gridLine, opacity: 0.6 } },
     },
     yAxis: {
       type: 'category',
       data: names,
       axisLabel: {
-        color: 'var(--text-secondary)',
+        color: c.axisLabel,
         fontSize: 11,
-        width: 110,
+        width: 120,
         overflow: 'truncate',
       },
       axisTick: { show: false },
@@ -92,7 +96,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
         label: {
           show: true,
           position: 'right',
-          color: 'var(--text-secondary)',
+          color: c.barLabelRight,
           fontSize: 11,
           formatter: (p: any) => p.value > 0 ? p.value : '',
         },

@@ -50,7 +50,7 @@ export class SyncService {
     await this.performSync('scheduled');
   }
 
-  async manualSync(password: string): Promise<{ success: boolean; message: string }> {
+  async manualSync(password: string, force = false): Promise<{ success: boolean; message: string }> {
     const expected = this.config.get('SYNC_PASSWORD', 'kioti');
     if (password !== expected) {
       return { success: false, message: 'Invalid password' };
@@ -58,8 +58,35 @@ export class SyncService {
     if (this.isSyncing) {
       return { success: false, message: 'Sync already in progress' };
     }
-    this.performSync('manual').catch(err => this.logger.error('Manual sync failed', err));
-    return { success: true, message: 'Sync started' };
+    this.performSync('manual', force).catch(err => this.logger.error('Manual sync failed', err));
+    return { success: true, message: force ? 'Full sync started (re-syncing all records)' : 'Sync started' };
+  }
+
+  async describeObjectFields(objectName?: string): Promise<{ name: string; label: string; type: string; referenceTo?: string[] }[]> {
+    const target = objectName || this.config.get<string>('SF_CLAIM_OBJECT', 'Claim__c');
+    const desc = await this.sf.describe(target);
+    return desc.fields
+      .map(f => ({ name: f.name, label: f.label, type: f.type, referenceTo: f.referenceTo }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getFieldMappings(): Promise<Record<string, string>> {
+    const claimObject = this.config.get<string>('SF_CLAIM_OBJECT', 'Claim__c');
+    const mappings = await this.prisma.fieldMapping.findMany({ where: { objectName: claimObject } });
+    const result: Record<string, string> = {};
+    for (const m of mappings) result[m.fieldKey] = m.fieldName;
+    return result;
+  }
+
+  async resetFieldMappings(): Promise<{ discovered: Record<string, string>; count: number }> {
+    const claimObject = this.config.get<string>('SF_CLAIM_OBJECT', 'Claim__c');
+    await this.prisma.fieldMapping.deleteMany({ where: { objectName: claimObject } });
+    this.sf.resetFieldMapping();
+    await this.sf.loadFieldMapping();
+    const newMappings = await this.prisma.fieldMapping.findMany({ where: { objectName: claimObject } });
+    const discovered: Record<string, string> = {};
+    for (const m of newMappings) discovered[m.fieldKey] = m.fieldName;
+    return { discovered, count: newMappings.length };
   }
 
   getProgress(): SyncProgress {
@@ -97,7 +124,7 @@ export class SyncService {
     this.logger.log(`[Sync] Phase: ${label}`);
   }
 
-  async performSync(syncType: 'scheduled' | 'manual') {
+  async performSync(syncType: 'scheduled' | 'manual', force = false) {
     if (this.isSyncing) {
       this.logger.warn('Sync already in progress, skipping');
       return;
@@ -135,7 +162,7 @@ export class SyncService {
         where: { status: 'success' },
         orderBy: { completedAt: 'desc' },
       });
-      const lastSyncDate = lastSuccessLog?.completedAt || null;
+      const lastSyncDate = force ? null : (lastSuccessLog?.completedAt || null);
 
       this.logger.log(`Syncing claims ${lastSyncDate ? `since ${lastSyncDate.toISOString()}` : '(full sync)'}`);
 

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { format, parseISO } from 'date-fns';
+import { useChartColors } from '../../hooks/useChartColors';
 
 interface Props {
   data: { month: string; total: number; approved: number; rejected: number; total_amount: number }[];
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export default function MonthlyTrendChart({ data, loading }: Props) {
+  const c = useChartColors();
+
   if (loading) return <SkeletonChart height={280} />;
   if (!data?.length) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">No trend data available</div>;
@@ -22,11 +25,14 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      className: 'echarts-tooltip-dark',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: c.tooltipText, fontSize: 13 },
       formatter: (params: any[]) => {
-        let html = `<div class="font-semibold mb-2">${params[0]?.axisValueLabel}</div>`;
+        let html = `<div style="color:${c.tooltipText};font-weight:600;margin-bottom:6px">${params[0]?.axisValueLabel}</div>`;
         params.forEach(p => {
-          html += `<div class="flex items-center gap-2 mb-0.5">
+          html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;color:${c.tooltipText}">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
             <span>${p.seriesName}: <b>${p.value}</b></span>
           </div>`;
@@ -36,7 +42,7 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     },
     legend: {
       data: ['Total', 'Approved', 'Rejected'],
-      textStyle: { color: 'var(--text-secondary)', fontSize: 11 },
+      textStyle: { color: c.legendText, fontSize: 11 },
       itemWidth: 12,
       itemHeight: 4,
     },
@@ -44,17 +50,17 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     xAxis: {
       type: 'category',
       data: months,
-      axisLine: { lineStyle: { color: 'var(--border-default)' } },
+      axisLine: { lineStyle: { color: c.gridLine } },
       axisTick: { show: false },
-      axisLabel: { color: 'var(--text-secondary)', fontSize: 11 },
+      axisLabel: { color: c.axisLabel, fontSize: 11 },
       boundaryGap: false,
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: 'var(--border-default)', type: 'dashed' } },
-      axisLabel: { color: 'var(--text-muted)', fontSize: 11 },
+      splitLine: { lineStyle: { color: c.gridLine } },
+      axisLabel: { color: c.axisMuted, fontSize: 11 },
     },
     series: [
       {
