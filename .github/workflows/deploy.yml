@@ -24,8 +24,10 @@ jobs:
             cd /opt/kioti-warranty-claim-dashboard
             echo "▶ Pulling latest code..."
             git pull origin main
+            echo "▶ Removing orphaned containers..."
+            docker compose down --remove-orphans 2>/dev/null || true
             echo "▶ Rebuilding and restarting containers..."
-            docker compose up --build -d
+            docker compose up --build -d --remove-orphans
             echo "▶ Container status:"
             docker compose ps
             echo "✅ Deploy complete."
