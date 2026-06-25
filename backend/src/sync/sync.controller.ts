@@ -14,4 +14,9 @@ export class SyncController {
   async getStatus() {
     return this.syncService.getStatus();
   }
+
+  @Get('progress')
+  getProgress() {
+    return this.syncService.getProgress();
+  }
 }

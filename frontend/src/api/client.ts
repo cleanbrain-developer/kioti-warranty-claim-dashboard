@@ -40,6 +40,7 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   getSyncStatus: () => request<any>('/sync/status'),
+  getSyncProgress: () => request<any>('/sync/progress'),
 
   // Visitors
   trackVisit: (sessionId: string) =>
