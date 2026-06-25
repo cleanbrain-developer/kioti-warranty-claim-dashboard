@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WarrantyClaim {
+  id              String    @id
+  sfId            String    @unique @map("sf_id")
+  claimNumber     String?   @map("claim_number")
+  claimType       String?   @map("claim_type")
+  status          String?
+  dealerAccountId String?   @map("dealer_account_id")
+  dealerName      String?   @map("dealer_name")
+  modelName       String?   @map("model_name")
+  serialNumber    String?   @map("serial_number")
+  repairDate      DateTime? @map("repair_date")
+  submittedDate   DateTime? @map("submitted_date")
+  approvedDate    DateTime? @map("approved_date")
+  rejectedDate    DateTime? @map("rejected_date")
+  totalAmount     Decimal?  @map("total_amount") @db.Decimal(15, 2)
+  laborAmount     Decimal?  @map("labor_amount") @db.Decimal(15, 2)
+  partsAmount     Decimal?  @map("parts_amount") @db.Decimal(15, 2)
+  hasHQProduct    Boolean   @default(false) @map("has_hq_product")
+  sfCreatedDate   DateTime? @map("sf_created_date")
+  sfLastModified  DateTime? @map("sf_last_modified")
+  rawData         Json?     @map("raw_data")
+
+  hqClaims        HQClaim[]
+  financialOrders FinancialOrder[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("warranty_claims")
+}
+
+model HQClaim {
+  id             String    @id @default(cuid())
+  sfId           String    @unique @map("sf_id")
+  claimId        String    @map("claim_id")
+  hqClaimNumber  String?   @map("hq_claim_number")
+  status         String?
+  judgmentResult String?   @map("judgment_result")
+  judgedDate     DateTime? @map("judged_date")
+  totalAmount    Decimal?  @map("total_amount") @db.Decimal(15, 2)
+  sfCreatedDate  DateTime? @map("sf_created_date")
+  rawData        Json?     @map("raw_data")
+
+  claim   WarrantyClaim @relation(fields: [claimId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("hq_claims")
+}
+
+model FinancialOrder {
+  id            String    @id @default(cuid())
+  sfId          String    @unique @map("sf_id")
+  claimId       String    @map("claim_id")
+  orderNumber   String?   @map("order_number")
+  orderType     String?   @map("order_type")
+  status        String?
+  amount        Decimal?  @db.Decimal(15, 2)
+  orderDate     DateTime? @map("order_date")
+  sfCreatedDate DateTime? @map("sf_created_date")
+  rawData       Json?     @map("raw_data")
+
+  claim            WarrantyClaim     @relation(fields: [claimId], references: [id])
+  billingDocuments BillingDocument[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_orders")
+}
+
+model BillingDocument {
+  id               String    @id @default(cuid())
+  sfId             String    @unique @map("sf_id")
+  financialOrderId String    @map("financial_order_id")
+  documentNumber   String?   @map("document_number")
+  documentType     String?   @map("document_type")
+  status           String?
+  amount           Decimal?  @db.Decimal(15, 2)
+  billingDate      DateTime? @map("billing_date")
+  sfCreatedDate    DateTime? @map("sf_created_date")
+  rawData          Json?     @map("raw_data")
+
+  financialOrder FinancialOrder @relation(fields: [financialOrderId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("billing_documents")
+}
+
+model SyncLog {
+  id             String    @id @default(cuid())
+  syncType       String    @map("sync_type")
+  status         String
+  claimsSynced   Int?      @map("claims_synced")
+  hqClaimsSynced Int?      @map("hq_claims_synced")
+  ordersSynced   Int?      @map("orders_synced")
+  docsSynced     Int?      @map("docs_synced")
+  errorMessage   String?   @map("error_message")
+  startedAt      DateTime  @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sync_logs")
+}
+
+model FieldMapping {
+  id         String   @id @default(cuid())
+  objectName String   @map("object_name")
+  fieldKey   String   @map("field_key")
+  fieldName  String   @map("field_name")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([objectName, fieldKey])
+  @@map("field_mappings")
+}
+
+model VisitorLog {
+  id        String   @id @default(cuid())
+  date      String
+  sessionId String   @map("session_id")
+  ipAddress String?  @map("ip_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([date, sessionId])
+  @@map("visitor_logs")
+}

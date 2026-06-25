@@ -1,0 +1,60 @@
+services:
+
+  # ── NestJS Backend ─────────────────────────────────────
+  backend:
+    build: ./backend
+    image: kioti-warranty-backend:latest
+    container_name: kioti-warranty-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://kioti:${DB_PASSWORD:-kioti1234}@db:5432/kioti_warranty
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - kioti-net
+
+  # ── React Frontend (nginx) ──────────────────────────────
+  frontend:
+    build: ./frontend
+    image: kioti-warranty-frontend:latest
+    container_name: kioti-warranty-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - kioti-net
+
+  # ── PostgreSQL 16 ───────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: kioti-warranty-db
+    environment:
+      POSTGRES_USER: kioti
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kioti1234}
+      POSTGRES_DB: kioti_warranty
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kioti -d kioti_warranty"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - kioti-net
+
+volumes:
+  postgres_data:
+    name: kioti_warranty_postgres_data
+
+networks:
+  kioti-net:
+    name: kioti-warranty-network
