@@ -176,6 +176,18 @@ export class SalesforceService {
         if (found) discovered[key] = found;
       }
 
+      // If dealerLookup wasn't found by candidate names, scan describe for any reference field pointing to Account
+      if (!discovered.dealerLookup) {
+        const accountRefField = desc.fields.find(f =>
+          f.type === 'reference' &&
+          f.referenceTo?.some(r => r.toLowerCase() === 'account'),
+        );
+        if (accountRefField) {
+          discovered.dealerLookup = accountRefField.name;
+          this.logger.log(`[FieldMap] dealerLookup discovered via describe: ${accountRefField.name}`);
+        }
+      }
+
       this.claimFieldMap = discovered;
       this.fieldMapLoaded = true;
 
