@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Lock, CheckCircle, XCircle, X, Database, FileText, Building2, CreditCard, Receipt, Zap, AlertTriangle, Users } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -69,6 +69,9 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   const [password, setPassword] = useState('');
   const [forceFullSync, setForceFullSync] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Track whether THIS modal session completed a sync (vs. opening after a prior run)
+  const [sessionCompleted, setSessionCompleted] = useState(false);
+  const prevIsSyncing = useRef(false);
   const qc = useQueryClient();
 
   const { data: progress } = useQuery({
@@ -77,6 +80,23 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
     refetchInterval: isSyncing ? 1500 : false,
     enabled: open,
   });
+
+  // Detect when a sync that was running in THIS session finishes
+  useEffect(() => {
+    if (prevIsSyncing.current && !isSyncing) {
+      const p = progress?.phase;
+      if (p === 'done' || p === 'error') setSessionCompleted(true);
+    }
+    prevIsSyncing.current = isSyncing;
+  }, [isSyncing, progress?.phase]);
+
+  // Reset session state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setSessionCompleted(false);
+      prevIsSyncing.current = false;
+    }
+  }, [open]);
 
   const mutation = useMutation({
     mutationFn: ({ pw, force }: { pw: string; force: boolean }) => api.triggerSync(pw, force),
@@ -101,7 +121,14 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   const handleClose = () => {
     setResult(null);
     setPassword('');
+    setSessionCompleted(false);
     onClose();
+  };
+
+  const handleSyncAgain = () => {
+    setSessionCompleted(false);
+    setResult(null);
+    setPassword('');
   };
 
   if (!open) return null;
@@ -109,8 +136,9 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
   const phase = progress?.phase || 'idle';
   const phaseMeta = PHASE_META[phase] || PHASE_META.idle;
   const showProgress = isSyncing && phase !== 'idle';
-  const isDone = phase === 'done';
-  const isError = phase === 'error';
+  // Only treat as done/error if the sync was started from THIS modal session
+  const isDone = sessionCompleted && phase === 'done';
+  const isError = sessionCompleted && phase === 'error';
   const showPanel = showProgress || isDone || isError;
 
   return (
@@ -304,9 +332,15 @@ export default function SyncModal({ open, onClose, isSyncing, lastSync }: Props)
             </form>
           )}
 
-          {/* Close after done/error */}
+          {/* Close / Sync Again after done/error */}
           {(isDone || isError) && !isSyncing && (
-            <button onClick={handleClose} className="btn-secondary w-full mt-2">Close</button>
+            <div className="flex gap-2 mt-2">
+              <button onClick={handleClose} className="btn-secondary flex-1">Close</button>
+              <button onClick={handleSyncAgain} className="btn-primary flex-1 flex items-center justify-center gap-1.5">
+                <RefreshCw size={13} />
+                Sync Again
+              </button>
+            </div>
           )}
           {isSyncing && (
             <button onClick={handleClose} className="btn-ghost w-full text-xs text-text-muted">
