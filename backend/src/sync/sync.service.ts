@@ -298,7 +298,6 @@ export class SyncService implements OnModuleInit {
               },
             }),
           ),
-          { timeout: 30000 },
         );
         claimsSynced += batch.length;
         this.progress.claimsSynced = claimsSynced;
