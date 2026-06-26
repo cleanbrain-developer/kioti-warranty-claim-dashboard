@@ -45,16 +45,19 @@ export class AnalyticsService {
       .filter(([k]) => rejectedStatuses.some(s => k.toLowerCase().includes(s.toLowerCase())))
       .reduce((acc, [, v]) => acc + v, 0);
 
+    const statusBreakdown = Object.entries(statusMap)
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       total,
       pending,
       approved,
-      rejected,
-      other: total - pending - approved - rejected,
       totalAmount: totalAmountResult._sum.totalAmount ? Number(totalAmountResult._sum.totalAmount) : 0,
       hqClaimsCount: hqCount,
       financialOrdersCount: financialOrderCount,
       billingDocsCount: billingDocCount,
+      statusBreakdown,
     };
   }
 
