@@ -5,8 +5,17 @@ import { PrismaService } from '../prisma/prisma.service';
 export class VisitorsService {
   constructor(private prisma: PrismaService) {}
 
-  async track(sessionId: string, ipAddress?: string): Promise<void> {
-    const today = new Date().toISOString().slice(0, 10);
+  private localDate(tz?: string): string {
+    const resolved = tz && tz !== 'local' ? tz : 'UTC';
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: resolved }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  async track(sessionId: string, ipAddress?: string, tz?: string): Promise<void> {
+    const today = this.localDate(tz);
     await this.prisma.visitorLog.upsert({
       where: { date_sessionId: { date: today, sessionId } },
       update: {},
@@ -14,8 +23,8 @@ export class VisitorsService {
     });
   }
 
-  async getTodayCount(): Promise<number> {
-    const today = new Date().toISOString().slice(0, 10);
+  async getTodayCount(tz?: string): Promise<number> {
+    const today = this.localDate(tz);
     return this.prisma.visitorLog.count({ where: { date: today } });
   }
 }

@@ -30,8 +30,8 @@ export default function Header() {
   }, [syncStatus?.isSyncing, qc]);
 
   const { data: visitors } = useQuery({
-    queryKey: ['visitors', 'today'],
-    queryFn: api.getTodayVisitors,
+    queryKey: ['visitors', 'today', timezone],
+    queryFn: () => api.getTodayVisitors(timezone),
     refetchInterval: 60_000,
   });
 

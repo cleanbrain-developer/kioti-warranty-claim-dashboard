@@ -33,19 +33,19 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
 }
 
 function AppInner() {
-  const { theme } = useStore();
+  const { theme, timezone } = useStore();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    api.trackVisit(sessionId).catch(() => {});
-  }, []);
+    api.trackVisit(sessionId, timezone).catch(() => {});
+  }, [timezone]);
 
   useQuery({
-    queryKey: ['visitors', 'today'],
-    queryFn: api.getTodayVisitors,
+    queryKey: ['visitors', 'today', timezone],
+    queryFn: () => api.getTodayVisitors(timezone),
     refetchInterval: 60_000,
   });
 

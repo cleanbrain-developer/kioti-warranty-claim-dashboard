@@ -60,10 +60,11 @@ export const api = {
     }),
 
   // Visitors
-  trackVisit: (sessionId: string) =>
+  trackVisit: (sessionId: string, tz?: string) =>
     request<{ success: boolean }>('/visitors/track', {
       method: 'POST',
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ sessionId, tz }),
     }),
-  getTodayVisitors: () => request<{ count: number }>('/visitors/today'),
+  getTodayVisitors: (tz?: string) =>
+    request<{ count: number }>(`/visitors/today${tz ? `?tz=${encodeURIComponent(tz)}` : ''}`),
 };
