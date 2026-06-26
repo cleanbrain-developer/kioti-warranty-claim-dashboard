@@ -178,66 +178,43 @@ export class AnalyticsService {
   }
 
   async getFinancialSummary() {
-    const [hqReceived, hqOutstanding, dealerPaid, dealerOutstanding] = await Promise.all([
-      // HQ Received = sum of billing document amounts grouped by currency
+    const [hqClaimed, dealerPaid, dealerOutstanding] = await Promise.all([
+      // HQ Claimed = sum of HQ Claim amounts per currency (what dealers billed to HQ Korea)
       this.prisma.$queryRaw<{ currency: string; total: number }[]>`
         SELECT COALESCE(currency_iso_code, 'USD') as currency,
-               COALESCE(SUM(amount), 0)::float as total
+               ABS(COALESCE(SUM(total_amount), 0))::float as total
+        FROM hq_claims
+        WHERE total_amount IS NOT NULL
+        GROUP BY COALESCE(currency_iso_code, 'USD')
+        ORDER BY total DESC
+      `,
+      // Dealer Paid = Billing Documents per currency (credit memos issued to dealers — ABS because stored as negative)
+      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+        SELECT COALESCE(currency_iso_code, 'USD') as currency,
+               ABS(COALESCE(SUM(amount), 0))::float as total
         FROM billing_documents
+        WHERE amount IS NOT NULL
         GROUP BY COALESCE(currency_iso_code, 'USD')
         ORDER BY total DESC
       `,
-      // HQ Outstanding = hasHQProduct claims with no HQClaim (I/F error) + rejected HQClaims
+      // Dealer Outstanding = Financial Orders with no billing document yet (payment initiated but not settled)
       this.prisma.$queryRaw<{ currency: string; total: number }[]>`
-        SELECT COALESCE(currency, 'USD') as currency, COALESCE(SUM(total), 0)::float as total FROM (
-          SELECT COALESCE(wc.currency_iso_code, 'USD') as currency, wc.total_amount as total
-          FROM warranty_claims wc
-          WHERE wc.has_hq_product = true
-            AND wc.total_amount IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM hq_claims hq WHERE hq.claim_id = wc.id)
-          UNION ALL
-          SELECT COALESCE(hq.currency_iso_code, 'USD') as currency, hq.total_amount as total
-          FROM hq_claims hq
-          WHERE hq.total_amount IS NOT NULL
-            AND (
-              hq.judgment_result ILIKE '%reject%' OR hq.judgment_result ILIKE '%deni%'
-              OR hq.judgment_result ILIKE '%error%' OR hq.judgment_result ILIKE '%cancel%'
-              OR hq.status ILIKE '%reject%' OR hq.status ILIKE '%error%'
-              OR hq.status ILIKE '%cancel%'
-            )
-        ) t
-        GROUP BY COALESCE(currency, 'USD')
-        ORDER BY total DESC
-      `,
-      // Dealer Paid = FinancialOrders successfully sent to ERP
-      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
-        SELECT COALESCE(currency_iso_code, 'USD') as currency,
-               COALESCE(SUM(amount), 0)::float as total
-        FROM financial_orders WHERE erp_status = 'S'
-        GROUP BY COALESCE(currency_iso_code, 'USD')
-        ORDER BY total DESC
-      `,
-      // Dealer Outstanding = FinancialOrders with ERP transmission error
-      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
-        SELECT COALESCE(currency_iso_code, 'USD') as currency,
-               COALESCE(SUM(amount), 0)::float as total
-        FROM financial_orders WHERE erp_status = 'E'
-        GROUP BY COALESCE(currency_iso_code, 'USD')
+        SELECT COALESCE(fo.currency_iso_code, 'USD') as currency,
+               ABS(COALESCE(SUM(fo.amount), 0))::float as total
+        FROM financial_orders fo
+        WHERE fo.amount IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM billing_documents bd WHERE bd.financial_order_id = fo.id
+          )
+        GROUP BY COALESCE(fo.currency_iso_code, 'USD')
         ORDER BY total DESC
       `,
     ]);
 
-    const sumTotal = (rows: { total: number }[]) => rows.reduce((acc, r) => acc + (r.total ?? 0), 0);
-
     return {
-      hqReceived: sumTotal(hqReceived),
-      hqReceivedByCurrency: hqReceived,
-      hqOutstanding: sumTotal(hqOutstanding),
-      hqOutstandingByCurrency: hqOutstanding,
-      dealerPaid: sumTotal(dealerPaid),
-      dealerPaidByCurrency: dealerPaid,
-      dealerOutstanding: sumTotal(dealerOutstanding),
-      dealerOutstandingByCurrency: dealerOutstanding,
+      hqClaimed,
+      dealerPaid,
+      dealerOutstanding,
     };
   }
 

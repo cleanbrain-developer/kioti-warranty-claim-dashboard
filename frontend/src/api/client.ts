@@ -32,10 +32,9 @@ export const api = {
   getMonthlyTrend: (months = 12) => request<any[]>(`/analytics/monthly-trend?months=${months}`),
   getOpenByDealer: (limit = 20) => request<any[]>(`/analytics/open-by-dealer?limit=${limit}`),
   getFinancialSummary: () => request<{
-    hqReceived: number; hqReceivedByCurrency: { currency: string; total: number }[];
-    hqOutstanding: number; hqOutstandingByCurrency: { currency: string; total: number }[];
-    dealerPaid: number; dealerPaidByCurrency: { currency: string; total: number }[];
-    dealerOutstanding: number; dealerOutstandingByCurrency: { currency: string; total: number }[];
+    hqClaimed: { currency: string; total: number }[];
+    dealerPaid: { currency: string; total: number }[];
+    dealerOutstanding: { currency: string; total: number }[];
   }>('/analytics/financial-summary'),
   getByAssignee: (limit = 20) => request<any[]>(`/analytics/by-assignee?limit=${limit}`),
   getAging: () => request<any>('/analytics/aging'),
