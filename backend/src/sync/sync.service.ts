@@ -21,7 +21,7 @@ export interface SyncProgress {
   errorMessage: string | null;
 }
 
-const BATCH_SIZE = 200;
+const DB_BATCH_SIZE = 1000; // same-network DB: large batches are safe
 
 @Injectable()
 export class SyncService implements OnModuleInit {
@@ -243,7 +243,7 @@ export class SyncService implements OnModuleInit {
         return mapped;
       });
 
-      for (const batch of this.chunk(mappedClaims, BATCH_SIZE)) {
+      for (const batch of this.chunk(mappedClaims, DB_BATCH_SIZE)) {
         await this.prisma.$transaction(
           batch.map(mapped =>
             this.prisma.warrantyClaim.upsert({
@@ -310,49 +310,35 @@ export class SyncService implements OnModuleInit {
       });
       const claimIdMap = new Map(claimRows.map(r => [r.sfId, r.id]));
 
-      // ── 2.5. Sync Dealer Accounts ─────────────────────────
-      const dealerIds = [...dealerAccountIds];
-      if (dealerIds.length) {
-        this.setPhase('syncing_dealers', `Syncing ${dealerIds.length} dealer accounts…`);
-        const accountsRaw = await this.sf.getDealerAccounts(dealerIds);
+      // ── 2.5 ~ 5. Parallel: Dealers + HQ Claims + (Financial Orders → Billing Docs) ──
+      this.setPhase('syncing_dealers', 'Syncing dealers, HQ claims, and financial orders in parallel…');
 
-        for (const batch of this.chunk(accountsRaw, BATCH_SIZE)) {
+      const syncDealers = async () => {
+        const dealerIds = [...dealerAccountIds];
+        if (!dealerIds.length) return;
+        const accountsRaw = await this.sf.getDealerAccounts(dealerIds);
+        for (const batch of this.chunk(accountsRaw, DB_BATCH_SIZE)) {
           await this.prisma.$transaction(
             batch.map(r =>
               this.prisma.dealerAccount.upsert({
                 where: { sfId: r.Id },
-                update: {
-                  name: r.Name ?? null,
-                  phone: r.Phone ?? null,
-                  city: r.BillingCity ?? null,
-                  state: r.BillingState ?? null,
-                  rawData: r,
-                },
-                create: {
-                  sfId: r.Id,
-                  name: r.Name ?? null,
-                  phone: r.Phone ?? null,
-                  city: r.BillingCity ?? null,
-                  state: r.BillingState ?? null,
-                  rawData: r,
-                },
+                update: { name: r.Name ?? null, phone: r.Phone ?? null, city: r.BillingCity ?? null, state: r.BillingState ?? null, rawData: r },
+                create: { sfId: r.Id, name: r.Name ?? null, phone: r.Phone ?? null, city: r.BillingCity ?? null, state: r.BillingState ?? null, rawData: r },
               }),
             ),
           );
           dealersSynced += batch.length;
           this.progress.dealersSynced = dealersSynced;
         }
-      }
+      };
 
-      // ── 3. Sync HQ Claims ────────────────────────────────
-      if (claimSfIds.length) {
-        this.setPhase('syncing_hq', `Syncing HQ Claims for ${claimSfIds.length.toLocaleString()} claims…`);
-
+      const syncHQClaims = async () => {
+        if (!claimSfIds.length) return;
         const hqRaw = await this.sf.getHQClaimsWithParent(claimSfIds);
         const hqWithParent = hqRaw.filter(r => claimIdMap.has(r._claimSfId));
         const hqParentIds = new Set<string>();
 
-        for (const batch of this.chunk(hqWithParent, BATCH_SIZE)) {
+        for (const batch of this.chunk(hqWithParent, DB_BATCH_SIZE)) {
           await this.prisma.$transaction(
             batch.map(r => {
               const claimId = claimIdMap.get(r._claimSfId)!;
@@ -388,28 +374,26 @@ export class SyncService implements OnModuleInit {
           this.progress.hqSynced = hqClaimsSynced;
         }
 
-        // Bulk-mark parent claims as hasHQProduct
         if (hqParentIds.size > 0) {
           await this.prisma.warrantyClaim.updateMany({
             where: { id: { in: [...hqParentIds] } },
             data: { hasHQProduct: true },
           });
         }
-      }
+      };
 
-      // ── 4. Sync Financial Orders ─────────────────────────
-      if (claimSfIds.length) {
-        this.setPhase('syncing_orders', 'Syncing Financial Orders…');
+      const syncOrdersAndDocs = async () => {
+        if (!claimSfIds.length) return;
 
+        // Financial orders
         const ordersRaw = await this.sf.getFinancialOrders(claimSfIds);
         const ordersWithParent = ordersRaw.filter(r => claimIdMap.has(r._claimSfId));
-        const orderSfIds: string[] = [];
+        const orderSfIds: string[] = ordersWithParent.map(r => r.Id);
 
-        for (const batch of this.chunk(ordersWithParent, BATCH_SIZE)) {
+        for (const batch of this.chunk(ordersWithParent, DB_BATCH_SIZE)) {
           await this.prisma.$transaction(
             batch.map(r => {
               const claimId = claimIdMap.get(r._claimSfId)!;
-              orderSfIds.push(r.Id);
               return this.prisma.financialOrder.upsert({
                 where: { sfId: r.Id },
                 update: {
@@ -445,56 +429,57 @@ export class SyncService implements OnModuleInit {
           this.progress.ordersSynced = ordersSynced;
         }
 
-        // ── 5. Sync Billing Documents ──────────────────────
-        if (orderSfIds.length) {
-          this.setPhase('syncing_docs', `Syncing Billing Documents for ${orderSfIds.length} orders…`);
+        if (!orderSfIds.length) return;
 
-          // Pre-build order sfId → DB id map
-          const orderRows = await this.prisma.financialOrder.findMany({
-            where: { sfId: { in: orderSfIds } },
-            select: { id: true, sfId: true },
-          });
-          const orderIdMap = new Map(orderRows.map(r => [r.sfId, r.id]));
+        // Billing documents (depends on orders being synced first)
+        const orderRows = await this.prisma.financialOrder.findMany({
+          where: { sfId: { in: orderSfIds } },
+          select: { id: true, sfId: true },
+        });
+        const orderIdMap = new Map(orderRows.map(r => [r.sfId, r.id]));
 
-          const docsRaw = await this.sf.getBillingDocuments(orderSfIds);
-          const docsWithParent = docsRaw.filter(r => orderIdMap.has(r._orderSfId));
+        const docsRaw = await this.sf.getBillingDocuments(orderSfIds);
+        const docsWithParent = docsRaw.filter(r => orderIdMap.has(r._orderSfId));
 
-          for (const batch of this.chunk(docsWithParent, BATCH_SIZE)) {
-            await this.prisma.$transaction(
-              batch.map(r => {
-                const financialOrderId = orderIdMap.get(r._orderSfId)!;
-                return this.prisma.billingDocument.upsert({
-                  where: { sfId: r.Id },
-                  update: {
-                    documentNumber: r.Name,
-                    documentType: r.Type__c ?? null,
-                    status: r.Status__c ?? null,
-                    amount: r._amount != null ? Number(r._amount) : null,
-                    currencyIsoCode: r._currency ?? null,
-                    billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
-                    sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-                    rawData: r,
-                  },
-                  create: {
-                    sfId: r.Id,
-                    financialOrderId,
-                    documentNumber: r.Name,
-                    documentType: r.Type__c ?? null,
-                    status: r.Status__c ?? null,
-                    amount: r._amount != null ? Number(r._amount) : null,
-                    currencyIsoCode: r._currency ?? null,
-                    billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
-                    sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-                    rawData: r,
-                  },
-                });
-              }),
-            );
-            docsSynced += batch.length;
-            this.progress.docsSynced = docsSynced;
-          }
+        for (const batch of this.chunk(docsWithParent, DB_BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const financialOrderId = orderIdMap.get(r._orderSfId)!;
+              return this.prisma.billingDocument.upsert({
+                where: { sfId: r.Id },
+                update: {
+                  documentNumber: r.Name,
+                  documentType: r.Type__c ?? null,
+                  status: r.Status__c ?? null,
+                  amount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+                create: {
+                  sfId: r.Id,
+                  financialOrderId,
+                  documentNumber: r.Name,
+                  documentType: r.Type__c ?? null,
+                  status: r.Status__c ?? null,
+                  amount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+              });
+            }),
+          );
+          docsSynced += batch.length;
+          this.progress.docsSynced = docsSynced;
         }
-      }
+      };
+
+      // Run all three tracks in parallel
+      await Promise.all([syncDealers(), syncHQClaims(), syncOrdersAndDocs()]);
+      this.setPhase('syncing_docs', 'Finalizing…');
 
       await this.prisma.syncLog.update({
         where: { id: log.id },

@@ -109,10 +109,14 @@ export class SalesforceService {
   async query<T = any>(soql: string): Promise<T[]> {
     await this.authenticate();
     const results: T[] = [];
-    let url = `/query?q=${encodeURIComponent(soql)}`;
+    let url: string | null = `/query?q=${encodeURIComponent(soql)}`;
+    let first = true;
 
     while (url) {
-      const res = await this.http.get<SFQueryResult<T>>(url);
+      const res = await this.http.get<SFQueryResult<T>>(url, {
+        headers: first ? { 'Sforce-Query-Options': 'batchSize=2000' } : {},
+      });
+      first = false;
       results.push(...res.data.records);
       url = res.data.nextRecordsUrl
         ? res.data.nextRecordsUrl.replace(/.*\/services\/data\/[^/]+/, '')
@@ -493,7 +497,7 @@ export class SalesforceService {
 
   async getHQClaims(claimSfIds: string[]): Promise<any[]> {
     if (!claimSfIds.length) return [];
-    const batchSize = 100;
+    const batchSize = 500;
     const results: any[] = [];
 
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
@@ -547,7 +551,7 @@ export class SalesforceService {
 
     const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
     const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
-    const batchSize = 100;
+    const batchSize = 500;
     const results: any[] = [];
 
     // Step 3: batch-query all claim IDs
@@ -608,7 +612,7 @@ export class SalesforceService {
 
     const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
     const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
-    const batchSize = 100;
+    const batchSize = 500;
     const results: any[] = [];
 
     // Step 3: batch-query all claim IDs
@@ -667,7 +671,7 @@ export class SalesforceService {
 
     const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
     const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
-    const batchSize = 100;
+    const batchSize = 500;
     const results: any[] = [];
 
     // Step 3: batch-query
