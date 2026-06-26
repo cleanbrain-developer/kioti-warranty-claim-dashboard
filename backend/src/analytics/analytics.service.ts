@@ -7,7 +7,7 @@ export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
   async getOverview() {
-    const [total, byStatus, totalAmountResult, hqCount, financialOrderCount, billingDocCount] =
+    const [total, byStatus, totalAmountResult, hqCount, financialOrderCount, billingDocCount, hqAmountResult] =
       await Promise.all([
         this.prisma.warrantyClaim.count(),
         this.prisma.warrantyClaim.groupBy({
@@ -19,6 +19,8 @@ export class AnalyticsService {
         this.prisma.hQClaim.count(),
         this.prisma.financialOrder.count(),
         this.prisma.billingDocument.count(),
+        // Fallback: total from HQ claims when claim-level amount is unavailable
+        this.prisma.hQClaim.aggregate({ _sum: { totalAmount: true } }),
       ]);
 
     const statusMap: Record<string, number> = {};
@@ -49,11 +51,15 @@ export class AnalyticsService {
       .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count);
 
+    const claimTotal = totalAmountResult._sum.totalAmount ? Number(totalAmountResult._sum.totalAmount) : 0;
+    const hqTotal = hqAmountResult._sum.totalAmount ? Math.abs(Number(hqAmountResult._sum.totalAmount)) : 0;
+
     return {
       total,
       pending,
       approved,
-      totalAmount: totalAmountResult._sum.totalAmount ? Number(totalAmountResult._sum.totalAmount) : 0,
+      totalAmount: claimTotal || hqTotal,
+      totalAmountSource: claimTotal > 0 ? 'claims' : (hqTotal > 0 ? 'hq' : 'none'),
       hqClaimsCount: hqCount,
       financialOrdersCount: financialOrderCount,
       billingDocsCount: billingDocCount,

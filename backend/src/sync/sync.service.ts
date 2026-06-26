@@ -142,6 +142,50 @@ export class SyncService implements OnModuleInit {
     return { discovered, count: newMappings.length };
   }
 
+  async diagnoseAmounts(): Promise<{
+    fieldMapping: Record<string, string>;
+    claimAmountStats: { nonNullCount: number; total: number; sampleValues: (number | null)[] };
+    currencyFieldsOnClaimObject: string[];
+  }> {
+    const claimObject = this.config.get<string>('SF_CLAIM_OBJECT', 'Claim__c');
+    const [mappings, stats, sampleRaws] = await Promise.all([
+      this.prisma.fieldMapping.findMany({ where: { objectName: claimObject } }),
+      this.prisma.$queryRaw<[{ non_null: number; total: number }]>`
+        SELECT COUNT(*) FILTER (WHERE total_amount IS NOT NULL)::int as non_null,
+               COUNT(*)::int as total
+        FROM warranty_claims
+      `,
+      this.prisma.$queryRaw<[{ raw_data: any }]>`
+        SELECT raw_data FROM warranty_claims
+        WHERE raw_data IS NOT NULL LIMIT 1
+      `,
+    ]);
+
+    const mapping: Record<string, string> = {};
+    for (const m of mappings) mapping[m.fieldKey] = m.fieldName;
+
+    const row = (stats as any[])[0] || { non_null: 0, total: 0 };
+    const nonNullCount = Number(row.non_null);
+    const total = Number(row.total);
+
+    // Extract currency-like field names from rawData of a sample claim
+    let currencyFieldsOnClaimObject: string[] = [];
+    const sample = (sampleRaws as any[])[0]?.raw_data;
+    if (sample) {
+      currencyFieldsOnClaimObject = Object.entries(sample)
+        .filter(([, v]) => typeof v === 'number' || v === null)
+        .filter(([k]) => k.toLowerCase().includes('amount') || k.toLowerCase().includes('price') || k.toLowerCase().includes('cost') || k.toLowerCase().includes('total') || k.toLowerCase().includes('pay'))
+        .map(([k, v]) => `${k}=${v}`)
+        .slice(0, 30);
+    }
+
+    const sampleValues = await this.prisma.$queryRaw<[{ v: number | null }]>`
+      SELECT total_amount::float as v FROM warranty_claims WHERE total_amount IS NOT NULL LIMIT 5
+    `.then(rows => (rows as any[]).map(r => r.v)).catch(() => []);
+
+    return { fieldMapping: mapping, claimAmountStats: { nonNullCount, total, sampleValues }, currencyFieldsOnClaimObject };
+  }
+
   getProgress(): SyncProgress {
     if (this.isSyncing && this.syncStartedAt) {
       return {

@@ -47,9 +47,9 @@ export default function KPICards({ data, loading }: Props) {
       bg: 'bg-chart-1/10',
     },
     {
-      label: 'Total Claim Amount',
+      label: data.totalAmountSource === 'hq' ? 'Total HQ Billed' : 'Total Claim Amount',
       value: data.totalAmount != null ? formatAmount(data.totalAmount) : '—',
-      sub: 'Across all claims',
+      sub: data.totalAmountSource === 'hq' ? 'Sum of HQ claim amounts' : 'Across all claims',
       icon: <DollarSign size={18} />,
       color: 'text-chart-5',
       bg: 'bg-chart-5/10',

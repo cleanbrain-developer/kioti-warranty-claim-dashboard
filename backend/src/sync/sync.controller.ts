@@ -35,6 +35,11 @@ export class SyncController {
     return this.syncService.resetFieldMappings();
   }
 
+  @Get('diagnose-amounts')
+  async diagnoseAmounts() {
+    return this.syncService.diagnoseAmounts();
+  }
+
   @Get('settings')
   async getSettings() {
     return this.syncService.getSettingsData();
