@@ -190,12 +190,22 @@ export class SalesforceService {
         partsAmount: ['PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c'],
         hasHQProduct: ['HasHQProduct__c', 'HQProductIncluded__c', 'IsHQProduct__c', 'ContainsHQParts__c'],
         assignedTo: ['PersonInCharge__c', 'AssignedTo__c', 'AssignedUser__c', 'HandlerName__c', 'ClaimHandler__c'],
+        currencyIsoCode: ['CurrencyIsoCode'],
       };
 
       const discovered: Record<string, string> = {};
       for (const [key, candidates] of Object.entries(mapping)) {
         const found = this.findField(fieldNames, candidates);
         if (found) discovered[key] = found;
+      }
+
+      // If totalAmount not found via candidates, fall back to first currency-type field
+      if (!discovered.totalAmount) {
+        const currencyField = desc.fields.find(f => f.type === 'currency');
+        if (currencyField) {
+          discovered.totalAmount = currencyField.name;
+          this.logger.log(`[FieldMap] totalAmount fallback to first currency field: ${currencyField.name}`);
+        }
       }
 
       // If dealerLookup wasn't found by candidate names, scan describe for any reference field pointing to Account
@@ -237,6 +247,64 @@ export class SalesforceService {
 
   private relationshipCache = new Map<string, string | null>();
   private erpFieldCache = new Map<string, { status: string | null; error: string | null }>();
+  private amountFieldCache = new Map<string, string | null>();
+
+  /**
+   * Discovers the best amount field on an object.
+   * Tries named candidates first, then falls back to the first currency-type field via describe.
+   */
+  async discoverAmountField(objectName: string, candidates: string[]): Promise<string | null> {
+    const cacheKey = `${objectName}:amount`;
+    if (this.amountFieldCache.has(cacheKey)) return this.amountFieldCache.get(cacheKey);
+    try {
+      const desc = await this.describe(objectName);
+      const names = desc.fields.map(f => f.name);
+      const lower = names.map(n => n.toLowerCase());
+
+      for (const c of candidates) {
+        const idx = lower.indexOf(c.toLowerCase());
+        if (idx !== -1) {
+          this.amountFieldCache.set(cacheKey, names[idx]);
+          this.logger.log(`[${objectName}] Amount field: ${names[idx]}`);
+          return names[idx];
+        }
+      }
+
+      // Fallback: first currency-type field
+      const currencyField = desc.fields.find(f => f.type === 'currency');
+      if (currencyField) {
+        this.amountFieldCache.set(cacheKey, currencyField.name);
+        this.logger.log(`[${objectName}] Amount field fallback (first currency type): ${currencyField.name}`);
+        return currencyField.name;
+      }
+
+      this.amountFieldCache.set(cacheKey, null);
+      return null;
+    } catch (err) {
+      this.logger.warn(`[${objectName}] discoverAmountField failed: ${err.message}`);
+      this.amountFieldCache.set(cacheKey, null);
+      return null;
+    }
+  }
+
+  /**
+   * Discovers if the object has a CurrencyIsoCode field (multi-currency Salesforce org).
+   */
+  async discoverCurrencyCodeField(objectName: string): Promise<string | null> {
+    const cacheKey = `${objectName}:currencyCode`;
+    if (this.amountFieldCache.has(cacheKey)) return this.amountFieldCache.get(cacheKey);
+    try {
+      const desc = await this.describe(objectName);
+      const f = desc.fields.find(f => f.name.toLowerCase() === 'currencyisocode');
+      const result = f?.name || null;
+      this.amountFieldCache.set(cacheKey, result);
+      if (result) this.logger.log(`[${objectName}] CurrencyIsoCode field: ${result}`);
+      return result;
+    } catch {
+      this.amountFieldCache.set(cacheKey, null);
+      return null;
+    }
+  }
 
   /**
    * Uses describe API to find the lookup field on childObject that references parentObject.
@@ -410,14 +478,22 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields (once, before batches)
+    // Step 2: discover available detail fields via describe
+    const [amountField, currencyField] = await Promise.all([
+      this.discoverAmountField(this.hqClaimObject, ['TotalAmount__c', 'Amount__c', 'ClaimAmount__c']),
+      this.discoverCurrencyCodeField(this.hqClaimObject),
+    ]);
+
+    const knownExtras = [amountField, currencyField].filter(Boolean);
+
     const workingDetails = await this.discoverWorkingFields(
       this.hqClaimObject,
-      ['Id', 'Name', parentField, 'CreatedDate'],
-      ['Status__c, JudgmentResult__c, JudgedDate__c, TotalAmount__c', 'Status__c, TotalAmount__c', ''],
+      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
+      ['Status__c, JudgmentResult__c, JudgedDate__c', 'Status__c, JudgmentResult__c', 'Status__c', ''],
     );
 
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
+    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
@@ -426,7 +502,12 @@ export class SalesforceService {
       const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
         const rows = await this.query(`SELECT ${allFields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`);
-        results.push(...rows.map(r => ({ ...r, _claimSfId: r[parentField] })));
+        results.push(...rows.map(r => ({
+          ...r,
+          _claimSfId: r[parentField],
+          _amount: amountField ? (r[amountField] ?? null) : null,
+          _currency: currencyField ? (r[currencyField] ?? null) : null,
+        })));
       } catch (err) {
         this.logger.warn(`[HQClaim] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }
@@ -455,18 +536,25 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields (once) + ERP fields
-    const erpFields = await this.discoverERPFields(this.financialOrderObject);
-    const erpStr = [erpFields.status, erpFields.error].filter(Boolean).join(', ');
+    // Step 2: discover available detail fields via describe (amount, currency, ERP)
+    const [erpFields, amountField, currencyField] = await Promise.all([
+      this.discoverERPFields(this.financialOrderObject),
+      this.discoverAmountField(this.financialOrderObject, ['Amount__c', 'TotalAmount__c', 'CreditAmount__c', 'PaymentAmount__c']),
+      this.discoverCurrencyCodeField(this.financialOrderObject),
+    ]);
 
+    // Known fields (from describe — guaranteed to exist)
+    const knownExtras = [amountField, currencyField, erpFields.status, erpFields.error].filter(Boolean);
+
+    // Probe-discover optional fields that may not exist
     const workingDetails = await this.discoverWorkingFields(
       this.financialOrderObject,
-      ['Id', 'Name', parentField, 'CreatedDate'],
-      ['Type__c, Status__c, Amount__c, OrderDate__c', 'Status__c, Amount__c', ''],
+      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
+      ['Type__c, Status__c, OrderDate__c', 'Status__c, OrderDate__c', 'Status__c', ''],
     );
 
-    const detailParts = [workingDetails, erpStr].filter(Boolean).join(', ');
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(detailParts ? [detailParts] : [])].join(', ');
+    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
@@ -480,6 +568,8 @@ export class SalesforceService {
           _claimSfId: r[parentField],
           _erpStatus: erpFields.status ? (r[erpFields.status] ?? null) : null,
           _erpErrorMessage: erpFields.error ? (r[erpFields.error] ?? null) : null,
+          _amount: amountField ? (r[amountField] ?? null) : null,
+          _currency: currencyField ? (r[currencyField] ?? null) : null,
         })));
       } catch (err) {
         this.logger.warn(`[FinancialOrder] Batch ${i}–${i + batchSize} failed: ${err.message}`);
@@ -508,14 +598,22 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields (once)
+    // Step 2: discover available detail fields via describe (amount, currency)
+    const [amountField, currencyField] = await Promise.all([
+      this.discoverAmountField(this.billingDocObject, ['Amount__c', 'TotalAmount__c', 'BillingAmount__c', 'PaymentAmount__c']),
+      this.discoverCurrencyCodeField(this.billingDocObject),
+    ]);
+
+    const knownExtras = [amountField, currencyField].filter(Boolean);
+
     const workingDetails = await this.discoverWorkingFields(
       this.billingDocObject,
-      ['Id', 'Name', parentField, 'CreatedDate'],
-      ['Type__c, Status__c, Amount__c, BillingDate__c', 'Status__c, Amount__c', ''],
+      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
+      ['Type__c, Status__c, BillingDate__c', 'Status__c, BillingDate__c', 'Status__c', ''],
     );
 
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...(workingDetails ? [workingDetails] : [])].join(', ');
+    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
+    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
     const batchSize = 100;
     const results: any[] = [];
 
@@ -524,7 +622,12 @@ export class SalesforceService {
       const ids = orderSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
         const rows = await this.query(`SELECT ${allFields} FROM ${this.billingDocObject} WHERE ${parentField} IN (${ids})`);
-        results.push(...rows.map(r => ({ ...r, _orderSfId: r[parentField] })));
+        results.push(...rows.map(r => ({
+          ...r,
+          _orderSfId: r[parentField],
+          _amount: amountField ? (r[amountField] ?? null) : null,
+          _currency: currencyField ? (r[currencyField] ?? null) : null,
+        })));
       } catch (err) {
         this.logger.warn(`[BillingDoc] Batch ${i}–${i + batchSize} failed: ${err.message}`);
       }
@@ -537,7 +640,7 @@ export class SalesforceService {
     dealerAccountId: string; dealerName: string; modelName: string; serialNumber: string;
     repairDate: Date; submittedDate: Date; approvedDate: Date; rejectedDate: Date;
     totalAmount: number; laborAmount: number; partsAmount: number; hasHQProduct: boolean;
-    assignedTo: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
+    assignedTo: string; currencyIsoCode: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
   } {
     const f = this.claimFieldMap;
 
@@ -578,6 +681,7 @@ export class SalesforceService {
       partsAmount: f.partsAmount ? (record[f.partsAmount] ? Number(record[f.partsAmount]) : null) : null,
       hasHQProduct: f.hasHQProduct ? Boolean(record[f.hasHQProduct]) : false,
       assignedTo,
+      currencyIsoCode: f.currencyIsoCode ? (record[f.currencyIsoCode] ?? null) : (record.CurrencyIsoCode ?? null),
       sfCreatedDate: record.CreatedDate ? new Date(record.CreatedDate) : null,
       sfLastModified: record.LastModifiedDate ? new Date(record.LastModifiedDate) : null,
       rawData: record,

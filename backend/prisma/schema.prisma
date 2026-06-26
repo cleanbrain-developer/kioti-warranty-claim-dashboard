@@ -31,6 +31,8 @@ model WarrantyClaim {
   sfLastModified  DateTime? @map("sf_last_modified")
   rawData         Json?     @map("raw_data")
 
+  currencyIsoCode String?   @map("currency_iso_code")
+
   hqClaims        HQClaim[]
   financialOrders FinancialOrder[]
 
@@ -48,9 +50,10 @@ model HQClaim {
   status         String?
   judgmentResult String?   @map("judgment_result")
   judgedDate     DateTime? @map("judged_date")
-  totalAmount    Decimal?  @map("total_amount") @db.Decimal(15, 2)
-  sfCreatedDate  DateTime? @map("sf_created_date")
-  rawData        Json?     @map("raw_data")
+  totalAmount     Decimal?  @map("total_amount") @db.Decimal(15, 2)
+  currencyIsoCode String?   @map("currency_iso_code")
+  sfCreatedDate   DateTime? @map("sf_created_date")
+  rawData         Json?     @map("raw_data")
 
   claim   WarrantyClaim @relation(fields: [claimId], references: [id])
 
@@ -71,6 +74,7 @@ model FinancialOrder {
   orderDate       DateTime? @map("order_date")
   erpStatus       String?   @map("erp_status")
   erpErrorMessage String?   @map("erp_error_message")
+  currencyIsoCode String?   @map("currency_iso_code")
   sfCreatedDate   DateTime? @map("sf_created_date")
   rawData         Json?     @map("raw_data")
 
@@ -91,6 +95,7 @@ model BillingDocument {
   documentType     String?   @map("document_type")
   status           String?
   amount           Decimal?  @db.Decimal(15, 2)
+  currencyIsoCode  String?   @map("currency_iso_code")
   billingDate      DateTime? @map("billing_date")
   sfCreatedDate    DateTime? @map("sf_created_date")
   rawData          Json?     @map("raw_data")

@@ -179,21 +179,24 @@ export class AnalyticsService {
 
   async getFinancialSummary() {
     const [hqReceived, hqOutstanding, dealerPaid, dealerOutstanding] = await Promise.all([
-      // HQ Received = sum of all billing document amounts (actual payments from HQ)
-      this.prisma.$queryRaw<[{ total: number }]>`
-        SELECT COALESCE(SUM(amount), 0)::float as total FROM billing_documents
+      // HQ Received = sum of billing document amounts grouped by currency
+      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+        SELECT COALESCE(currency_iso_code, 'USD') as currency,
+               COALESCE(SUM(amount), 0)::float as total
+        FROM billing_documents
+        GROUP BY COALESCE(currency_iso_code, 'USD')
+        ORDER BY total DESC
       `,
-      // HQ Outstanding = claims with hasHQProduct but no HQClaim (I/F error)
-      //                  + HQClaims with rejected/error judgment
-      this.prisma.$queryRaw<[{ total: number }]>`
-        SELECT COALESCE(SUM(total), 0)::float as total FROM (
-          SELECT wc.total_amount as total
+      // HQ Outstanding = hasHQProduct claims with no HQClaim (I/F error) + rejected HQClaims
+      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+        SELECT COALESCE(currency, 'USD') as currency, COALESCE(SUM(total), 0)::float as total FROM (
+          SELECT COALESCE(wc.currency_iso_code, 'USD') as currency, wc.total_amount as total
           FROM warranty_claims wc
           WHERE wc.has_hq_product = true
             AND wc.total_amount IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM hq_claims hq WHERE hq.claim_id = wc.id)
           UNION ALL
-          SELECT hq.total_amount as total
+          SELECT COALESCE(hq.currency_iso_code, 'USD') as currency, hq.total_amount as total
           FROM hq_claims hq
           WHERE hq.total_amount IS NOT NULL
             AND (
@@ -203,22 +206,38 @@ export class AnalyticsService {
               OR hq.status ILIKE '%cancel%'
             )
         ) t
+        GROUP BY COALESCE(currency, 'USD')
+        ORDER BY total DESC
       `,
-      // Dealer Paid = FinancialOrders successfully sent to ERP (credit memos paid)
-      this.prisma.$queryRaw<[{ total: number }]>`
-        SELECT COALESCE(SUM(amount), 0)::float as total FROM financial_orders WHERE erp_status = 'S'
+      // Dealer Paid = FinancialOrders successfully sent to ERP
+      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+        SELECT COALESCE(currency_iso_code, 'USD') as currency,
+               COALESCE(SUM(amount), 0)::float as total
+        FROM financial_orders WHERE erp_status = 'S'
+        GROUP BY COALESCE(currency_iso_code, 'USD')
+        ORDER BY total DESC
       `,
       // Dealer Outstanding = FinancialOrders with ERP transmission error
-      this.prisma.$queryRaw<[{ total: number }]>`
-        SELECT COALESCE(SUM(amount), 0)::float as total FROM financial_orders WHERE erp_status = 'E'
+      this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+        SELECT COALESCE(currency_iso_code, 'USD') as currency,
+               COALESCE(SUM(amount), 0)::float as total
+        FROM financial_orders WHERE erp_status = 'E'
+        GROUP BY COALESCE(currency_iso_code, 'USD')
+        ORDER BY total DESC
       `,
     ]);
 
+    const sumTotal = (rows: { total: number }[]) => rows.reduce((acc, r) => acc + (r.total ?? 0), 0);
+
     return {
-      hqReceived: hqReceived[0]?.total ?? 0,
-      hqOutstanding: hqOutstanding[0]?.total ?? 0,
-      dealerPaid: dealerPaid[0]?.total ?? 0,
-      dealerOutstanding: dealerOutstanding[0]?.total ?? 0,
+      hqReceived: sumTotal(hqReceived),
+      hqReceivedByCurrency: hqReceived,
+      hqOutstanding: sumTotal(hqOutstanding),
+      hqOutstandingByCurrency: hqOutstanding,
+      dealerPaid: sumTotal(dealerPaid),
+      dealerPaidByCurrency: dealerPaid,
+      dealerOutstanding: sumTotal(dealerOutstanding),
+      dealerOutstandingByCurrency: dealerOutstanding,
     };
   }
 
