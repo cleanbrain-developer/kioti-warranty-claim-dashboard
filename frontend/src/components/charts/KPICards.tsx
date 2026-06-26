@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileText, DollarSign, Building, CreditCard, Receipt } from 'lucide-react';
 import { SkeletonCard } from '../ui/Skeleton';
 import Badge from '../ui/Badge';
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function KPICards({ data, loading }: Props) {
+  const navigate = useNavigate();
   if (loading) {
     return (
       <div className="space-y-4">
@@ -114,15 +116,17 @@ export default function KPICards({ data, loading }: Props) {
           </div>
           <div className="flex flex-wrap gap-2">
             {statusBreakdown.map(({ status, count }) => (
-              <div
+              <button
                 key={status}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-elevated border border-border hover:border-border-emphasis transition-colors"
+                type="button"
+                onClick={() => navigate(`/claims?status=${encodeURIComponent(status)}`)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-elevated border border-border hover:border-accent-blue/50 hover:bg-accent-blue/5 transition-colors cursor-pointer"
               >
                 <Badge label={status} />
                 <span className="text-xs font-semibold text-text-primary tabular-nums">
                   {count.toLocaleString()}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

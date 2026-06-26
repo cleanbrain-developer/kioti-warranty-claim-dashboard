@@ -7,32 +7,31 @@ interface FilterValues {
   search: string;
   status: string;
   dealer: string;
-  model: string;
   assignee: string;
   dateFrom: string;
   dateTo: string;
   hasHQProduct: string;
-  openOnly: string;
+  hasFinancialOrder: string;
+  hasBillingDocument: string;
   limit: number;
 }
 
 interface Props {
   filters: FilterValues;
-  options: { statuses: string[]; dealers: string[]; models: string[]; assignees: string[] };
+  options: { statuses: string[]; dealers: string[]; assignees: string[] };
   onChange: (f: Partial<FilterValues>) => void;
-  onApply: () => void;
   onClear: () => void;
   totalCount: number;
 }
 
-export default function ClaimFilters({ filters, options, onChange, onApply, onClear, totalCount }: Props) {
+export default function ClaimFilters({ filters, options, onChange, onClear, totalCount }: Props) {
   const [expanded, setExpanded] = useState(true);
   const { scrollMode, setScrollMode } = useStore();
 
   const hasActiveFilters = !!(
     filters.search || filters.status || filters.dealer ||
-    filters.model || filters.assignee || filters.dateFrom || filters.dateTo ||
-    filters.hasHQProduct || filters.openOnly
+    filters.assignee || filters.dateFrom || filters.dateTo ||
+    filters.hasHQProduct || filters.hasFinancialOrder || filters.hasBillingDocument
   );
 
   return (
@@ -89,7 +88,7 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
       {/* Filter fields */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
             {/* Search */}
             <div className="relative xl:col-span-2">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
@@ -97,7 +96,6 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
                 type="text"
                 value={filters.search}
                 onChange={e => onChange({ search: e.target.value })}
-                onKeyDown={e => e.key === 'Enter' && onApply()}
                 placeholder="Claim #, Dealer, Model, Serial…"
                 className="input pl-8"
               />
@@ -127,16 +125,6 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
               ))}
             </select>
 
-            {/* Model */}
-            <select
-              value={filters.model}
-              onChange={e => onChange({ model: e.target.value })}
-              className="select"
-            >
-              <option value="">All Models</option>
-              {options.models.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-
             {/* Assignee */}
             <select
               value={filters.assignee}
@@ -151,21 +139,22 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
               ))}
             </select>
 
-            {/* Date From */}
+            {/* Submitted From */}
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-text-muted pl-0.5">From</span>
+              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">Submitted From</span>
               <DatePicker value={filters.dateFrom} onChange={v => onChange({ dateFrom: v })} />
             </div>
 
-            {/* Date To */}
+            {/* Submitted To */}
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-text-muted pl-0.5">To</span>
+              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">Submitted To</span>
               <DatePicker value={filters.dateTo} onChange={v => onChange({ dateTo: v })} />
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          {/* Checkboxes + rows + clear */}
+          <div className="flex items-center justify-between flex-wrap gap-y-2">
+            <div className="flex items-center gap-4 flex-wrap">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input
                   type="checkbox"
@@ -174,23 +163,35 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
                   className="w-3.5 h-3.5 rounded accent-accent-blue cursor-pointer"
                 />
                 <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
-                  HQ Claims Only
+                  Has HQ Claim
                 </span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input
                   type="checkbox"
-                  checked={filters.openOnly === 'true'}
-                  onChange={e => onChange({ openOnly: e.target.checked ? 'true' : '' })}
+                  checked={filters.hasFinancialOrder === 'true'}
+                  onChange={e => onChange({ hasFinancialOrder: e.target.checked ? 'true' : '' })}
                   className="w-3.5 h-3.5 rounded accent-accent-blue cursor-pointer"
                 />
                 <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
-                  Open Claims Only
+                  Has Financial Order
                 </span>
               </label>
 
-              <div className="flex items-center gap-1.5 ml-4">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={filters.hasBillingDocument === 'true'}
+                  onChange={e => onChange({ hasBillingDocument: e.target.checked ? 'true' : '' })}
+                  className="w-3.5 h-3.5 rounded accent-accent-blue cursor-pointer"
+                />
+                <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+                  Has Billing Document
+                </span>
+              </label>
+
+              <div className="flex items-center gap-1.5">
                 <span className="text-xs text-text-muted">Rows:</span>
                 <select
                   value={filters.limit}
@@ -202,16 +203,11 @@ export default function ClaimFilters({ filters, options, onChange, onApply, onCl
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {hasActiveFilters && (
-                <button onClick={onClear} className="btn-ghost text-xs gap-1">
-                  <X size={12} /> Clear
-                </button>
-              )}
-              <button onClick={onApply} className="btn-primary text-xs px-4 py-1.5">
-                Apply
+            {hasActiveFilters && (
+              <button onClick={onClear} className="btn-ghost text-xs gap-1">
+                <X size={12} /> Clear All
               </button>
-            </div>
+            )}
           </div>
         </div>
       )}

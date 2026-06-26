@@ -13,6 +13,8 @@ export interface ClaimsQuery {
   dateFrom?: string;
   dateTo?: string;
   hasHQProduct?: string;
+  hasFinancialOrder?: string;
+  hasBillingDocument?: string;
   openOnly?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
@@ -55,6 +57,8 @@ export class ClaimsService {
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
     if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };
     if (q.hasHQProduct === 'true') where.hasHQProduct = true;
+    if (q.hasFinancialOrder === 'true') where.financialOrders = { some: {} };
+    if (q.hasBillingDocument === 'true') where.financialOrders = { some: { billingDocuments: { some: {} } } };
 
     if (q.openOnly === 'true') {
       const closedTerms = ['approved', 'paid', 'rejected', 'closed', 'completed', 'denied', 'cancel'];

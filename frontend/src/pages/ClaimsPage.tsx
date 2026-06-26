@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -6,49 +6,35 @@ import ClaimsTable from '../components/tables/ClaimsTable';
 import ClaimFilters from '../components/tables/ClaimFilters';
 import { useStore } from '../store/useStore';
 
-const DEFAULTS = {
-  search: '', status: '', dealer: '', model: '', assignee: '',
-  dateFrom: '', dateTo: '', hasHQProduct: '', openOnly: '', limit: 20,
-};
-
 export default function ClaimsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { scrollMode } = useStore();
 
-  // Derive filter state from URL
   const getParam = (key: string, fallback = '') => searchParams.get(key) || fallback;
-  const [staged, setStaged] = useState({
-    search: getParam('search'),
-    status: getParam('status'),
-    dealer: getParam('dealer'),
-    model: getParam('model'),
-    assignee: getParam('assignee'),
-    dateFrom: getParam('dateFrom'),
-    dateTo: getParam('dateTo'),
-    hasHQProduct: getParam('hasHQProduct'),
-    openOnly: getParam('openOnly'),
-    limit: parseInt(getParam('limit', '20')),
-  });
 
-  const [infiniteRows, setInfiniteRows] = useState<any[]>([]);
-  const [infinitePage, setInfinitePage] = useState(1);
+  const [infiniteRows, setInfiniteRows] = React.useState<any[]>([]);
+  const [infinitePage, setInfinitePageState] = React.useState(1);
 
   const page = parseInt(getParam('page', '1'));
   const sortBy = getParam('sortBy', 'sfCreatedDate');
   const sortDir = (getParam('sortDir', 'desc') || 'desc') as 'asc' | 'desc';
 
-  const queryParams = {
-    page: scrollMode === 'infinite' ? infinitePage : page,
-    limit: staged.limit,
+  const filters = {
     search: getParam('search'),
     status: getParam('status'),
     dealer: getParam('dealer'),
-    model: getParam('model'),
     assignee: getParam('assignee'),
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
-    openOnly: getParam('openOnly'),
+    hasFinancialOrder: getParam('hasFinancialOrder'),
+    hasBillingDocument: getParam('hasBillingDocument'),
+    limit: parseInt(getParam('limit', '20')),
+  };
+
+  const queryParams = {
+    page: scrollMode === 'infinite' ? infinitePage : page,
+    ...filters,
     sortBy,
     sortDir,
   };
@@ -65,15 +51,9 @@ export default function ClaimsPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // Sync staged filters from URL when navigating from Insights chart
+  // Sync URL params from Insights chart navigation
   React.useEffect(() => {
-    const urlAssignee = getParam('assignee');
-    const urlOpenOnly = getParam('openOnly');
-    setStaged(s => ({
-      ...s,
-      ...(urlAssignee !== undefined ? { assignee: urlAssignee } : {}),
-      ...(urlOpenOnly !== undefined ? { openOnly: urlOpenOnly } : {}),
-    }));
+    // no-op: filters read directly from URL
   }, [searchParams]);
 
   // Merge infinite scroll rows
@@ -87,31 +67,28 @@ export default function ClaimsPage() {
   React.useEffect(() => {
     if (scrollMode === 'infinite') {
       setInfiniteRows([]);
-      setInfinitePage(1);
+      setInfinitePageState(1);
     }
   }, [searchParams, scrollMode]);
 
-  const applyFilters = useCallback(() => {
-    const params: Record<string, string> = {};
-    if (staged.search) params.search = staged.search;
-    if (staged.status) params.status = staged.status;
-    if (staged.dealer) params.dealer = staged.dealer;
-    if (staged.model) params.model = staged.model;
-    if (staged.assignee) params.assignee = staged.assignee;
-    if (staged.dateFrom) params.dateFrom = staged.dateFrom;
-    if (staged.dateTo) params.dateTo = staged.dateTo;
-    if (staged.hasHQProduct) params.hasHQProduct = staged.hasHQProduct;
-    if (staged.openOnly) params.openOnly = staged.openOnly;
-    if (staged.limit !== 20) params.limit = String(staged.limit);
-    params.sortBy = sortBy;
-    params.sortDir = sortDir;
-    setSearchParams(params, { replace: false });
-  }, [staged, sortBy, sortDir, setSearchParams]);
+  // Direct URL update — called on every filter change (no staging)
+  const handleFilterChange = useCallback((partial: Record<string, any>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(partial)) {
+        if (v === '' || v === undefined || v === null) next.delete(k);
+        else next.set(k, String(v));
+      }
+      next.set('page', '1');
+      next.set('sortBy', sortBy);
+      next.set('sortDir', sortDir);
+      return next;
+    }, { replace: false });
+  }, [setSearchParams, sortBy, sortDir]);
 
   const clearFilters = useCallback(() => {
-    setStaged(DEFAULTS);
-    setSearchParams({}, { replace: false });
-  }, [setSearchParams]);
+    setSearchParams({ sortBy, sortDir }, { replace: false });
+  }, [setSearchParams, sortBy, sortDir]);
 
   const handleSort = useCallback((field: string) => {
     const newDir = sortBy === field && sortDir === 'desc' ? 'asc' : 'desc';
@@ -133,7 +110,7 @@ export default function ClaimsPage() {
   }, [setSearchParams]);
 
   const loadMore = useCallback(() => {
-    if (!isFetching) setInfinitePage(p => p + 1);
+    if (!isFetching) setInfinitePageState(p => p + 1);
   }, [isFetching]);
 
   const hasNextPage = scrollMode === 'infinite'
@@ -141,16 +118,15 @@ export default function ClaimsPage() {
     : false;
 
   const displayData = scrollMode === 'infinite'
-    ? { data: infiniteRows, total: data?.total ?? 0, page: 1, limit: staged.limit, totalPages: 1 }
+    ? { data: infiniteRows, total: data?.total ?? 0, page: 1, limit: filters.limit, totalPages: 1 }
     : data;
 
   return (
     <div className="space-y-4 animate-slide-up">
       <ClaimFilters
-        filters={staged}
-        options={filterOptions || { statuses: [], dealers: [], models: [], assignees: [] }}
-        onChange={v => setStaged(s => ({ ...s, ...v }))}
-        onApply={applyFilters}
+        filters={filters}
+        options={filterOptions || { statuses: [], dealers: [], assignees: [] }}
+        onChange={handleFilterChange}
         onClear={clearFilters}
         totalCount={data?.total ?? 0}
       />

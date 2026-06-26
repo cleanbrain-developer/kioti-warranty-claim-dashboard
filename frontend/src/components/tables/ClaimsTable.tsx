@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { format } from 'date-fns';
 import Badge from '../ui/Badge';
 import { SkeletonTable } from '../ui/Skeleton';
@@ -281,8 +281,17 @@ export default function ClaimsTable({
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}
+              onClick={() => onPageChange(1)}
+              className="p-1.5 rounded hover:bg-bg-hover text-text-secondary disabled:opacity-30 transition-colors"
+              title="First page"
+            >
+              <ChevronsLeft size={14} />
+            </button>
+            <button
+              disabled={page <= 1}
               onClick={() => onPageChange(page - 1)}
               className="p-1.5 rounded hover:bg-bg-hover text-text-secondary disabled:opacity-30 transition-colors"
+              title="Previous page"
             >
               <ArrowLeft size={14} />
             </button>
@@ -310,8 +319,17 @@ export default function ClaimsTable({
               disabled={page >= totalPages}
               onClick={() => onPageChange(page + 1)}
               className="p-1.5 rounded hover:bg-bg-hover text-text-secondary disabled:opacity-30 transition-colors"
+              title="Next page"
             >
               <ArrowRight size={14} />
+            </button>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(totalPages)}
+              className="p-1.5 rounded hover:bg-bg-hover text-text-secondary disabled:opacity-30 transition-colors"
+              title="Last page"
+            >
+              <ChevronsRight size={14} />
             </button>
           </div>
         </div>
