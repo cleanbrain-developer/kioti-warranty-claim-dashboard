@@ -177,6 +177,51 @@ export class AnalyticsService {
     return rows.map(r => r.assignedTo).filter(Boolean);
   }
 
+  async getFinancialSummary() {
+    const [hqReceived, hqOutstanding, dealerPaid, dealerOutstanding] = await Promise.all([
+      // HQ Received = sum of all billing document amounts (actual payments from HQ)
+      this.prisma.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(amount), 0)::float as total FROM billing_documents
+      `,
+      // HQ Outstanding = claims with hasHQProduct but no HQClaim (I/F error)
+      //                  + HQClaims with rejected/error judgment
+      this.prisma.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(total), 0)::float as total FROM (
+          SELECT wc.total_amount as total
+          FROM warranty_claims wc
+          WHERE wc.has_hq_product = true
+            AND wc.total_amount IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM hq_claims hq WHERE hq.claim_id = wc.id)
+          UNION ALL
+          SELECT hq.total_amount as total
+          FROM hq_claims hq
+          WHERE hq.total_amount IS NOT NULL
+            AND (
+              hq.judgment_result ILIKE '%reject%' OR hq.judgment_result ILIKE '%deni%'
+              OR hq.judgment_result ILIKE '%error%' OR hq.judgment_result ILIKE '%cancel%'
+              OR hq.status ILIKE '%reject%' OR hq.status ILIKE '%error%'
+              OR hq.status ILIKE '%cancel%'
+            )
+        ) t
+      `,
+      // Dealer Paid = FinancialOrders successfully sent to ERP (credit memos paid)
+      this.prisma.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(amount), 0)::float as total FROM financial_orders WHERE erp_status = 'S'
+      `,
+      // Dealer Outstanding = FinancialOrders with ERP transmission error
+      this.prisma.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(amount), 0)::float as total FROM financial_orders WHERE erp_status = 'E'
+      `,
+    ]);
+
+    return {
+      hqReceived: hqReceived[0]?.total ?? 0,
+      hqOutstanding: hqOutstanding[0]?.total ?? 0,
+      dealerPaid: dealerPaid[0]?.total ?? 0,
+      dealerOutstanding: dealerOutstanding[0]?.total ?? 0,
+    };
+  }
+
   async getAging() {
     const buckets = await this.prisma.$queryRaw<any[]>`
       WITH aged AS (

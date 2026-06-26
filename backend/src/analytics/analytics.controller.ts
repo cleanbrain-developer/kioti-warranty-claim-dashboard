@@ -45,6 +45,11 @@ export class AnalyticsController {
     return this.analyticsService.getAssignees();
   }
 
+  @Get('financial-summary')
+  getFinancialSummary() {
+    return this.analyticsService.getFinancialSummary();
+  }
+
   @Get('aging')
   getAging() {
     return this.analyticsService.getAging();

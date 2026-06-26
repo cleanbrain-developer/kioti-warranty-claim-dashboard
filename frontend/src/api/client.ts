@@ -31,6 +31,7 @@ export const api = {
   getByModel: (limit = 15) => request<any[]>(`/analytics/by-model?limit=${limit}`),
   getMonthlyTrend: (months = 12) => request<any[]>(`/analytics/monthly-trend?months=${months}`),
   getOpenByDealer: (limit = 20) => request<any[]>(`/analytics/open-by-dealer?limit=${limit}`),
+  getFinancialSummary: () => request<{ hqReceived: number; hqOutstanding: number; dealerPaid: number; dealerOutstanding: number }>('/analytics/financial-summary'),
   getByAssignee: (limit = 20) => request<any[]>(`/analytics/by-assignee?limit=${limit}`),
   getAging: () => request<any>('/analytics/aging'),
 

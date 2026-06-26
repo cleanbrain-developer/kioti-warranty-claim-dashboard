@@ -5,6 +5,7 @@ import KPICards from '../components/charts/KPICards';
 import ByStatusChart from '../components/charts/ByStatusChart';
 import MonthlyTrendChart from '../components/charts/MonthlyTrendChart';
 import ByAssigneeChart from '../components/charts/ByAssigneeChart';
+import FinancialSummaryCards from '../components/charts/FinancialSummaryCards';
 
 export default function InsightsPage() {
   const { data: overview, isLoading: loadingOverview } = useQuery({
@@ -23,11 +24,23 @@ export default function InsightsPage() {
     queryKey: ['analytics', 'openByDealer'],
     queryFn: () => api.getOpenByDealer(20),
   });
+  const { data: financialSummary, isLoading: loadingFinancial } = useQuery({
+    queryKey: ['analytics', 'financialSummary'],
+    queryFn: api.getFinancialSummary,
+  });
 
   return (
     <div className="space-y-6 animate-slide-up">
       {/* KPI row */}
       <KPICards data={overview} loading={loadingOverview} />
+
+      {/* Financial summary row */}
+      <div>
+        <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+          Financial Summary
+        </h2>
+        <FinancialSummaryCards data={financialSummary} loading={loadingFinancial} />
+      </div>
 
       {/* Status + Trend row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
