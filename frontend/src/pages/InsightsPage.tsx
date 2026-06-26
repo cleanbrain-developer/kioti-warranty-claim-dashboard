@@ -29,9 +29,9 @@ export default function InsightsPage() {
     queryKey: ['analytics', 'trend'],
     queryFn: () => api.getMonthlyTrend(12),
   });
-  const { data: byAssignee, isLoading: loadingAssignee } = useQuery({
-    queryKey: ['analytics', 'byAssignee'],
-    queryFn: () => api.getByAssignee(20),
+  const { data: openByDealer, isLoading: loadingOpenByDealer } = useQuery({
+    queryKey: ['analytics', 'openByDealer'],
+    queryFn: () => api.getOpenByDealer(20),
   });
 
   return (
@@ -75,17 +75,17 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      {/* Assignee row */}
+      {/* Open by Dealer row */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
-            Open Claims by Assignee
+            Open Claims by Dealer
           </h2>
           <span className="text-xs text-text-muted">
             Top 20 · Click bar to view in Claims tab
           </span>
         </div>
-        <ByAssigneeChart data={byAssignee || []} loading={loadingAssignee} />
+        <ByAssigneeChart data={openByDealer || []} loading={loadingOpenByDealer} />
       </div>
     </div>
   );

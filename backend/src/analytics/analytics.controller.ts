@@ -30,6 +30,11 @@ export class AnalyticsController {
     return this.analyticsService.getMonthlyTrend(months ? parseInt(months) : 12);
   }
 
+  @Get('open-by-dealer')
+  getOpenByDealer(@Query('limit') limit?: string) {
+    return this.analyticsService.getOpenByDealer(limit ? parseInt(limit) : 20);
+  }
+
   @Get('by-assignee')
   getByAssignee(@Query('limit') limit?: string) {
     return this.analyticsService.getByAssignee(limit ? parseInt(limit) : 20);

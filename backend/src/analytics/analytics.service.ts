@@ -124,6 +124,27 @@ export class AnalyticsService {
     return rows;
   }
 
+  async getOpenByDealer(limit = 20) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        COALESCE(dealer_name, 'Unknown') as dealer,
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN status NOT ILIKE '%approved%' AND status NOT ILIKE '%paid%'
+          AND status NOT ILIKE '%rejected%' AND status NOT ILIKE '%closed%'
+          AND status NOT ILIKE '%completed%' AND status NOT ILIKE '%denied%'
+          AND status NOT ILIKE '%cancel%' THEN 1 END)::int as open,
+        COUNT(CASE WHEN status ILIKE '%approved%' OR status ILIKE '%paid%' OR status ILIKE '%completed%' THEN 1 END)::int as approved,
+        COUNT(CASE WHEN status ILIKE '%rejected%' OR status ILIKE '%denied%' THEN 1 END)::int as rejected,
+        COUNT(CASE WHEN status ILIKE '%pending%' OR status ILIKE '%submitted%' OR status ILIKE '%review%' THEN 1 END)::int as pending
+      FROM warranty_claims
+      WHERE dealer_name IS NOT NULL
+      GROUP BY COALESCE(dealer_name, 'Unknown')
+      ORDER BY open DESC, total DESC
+      LIMIT ${limit}
+    `;
+    return rows;
+  }
+
   async getByAssignee(limit = 20) {
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT

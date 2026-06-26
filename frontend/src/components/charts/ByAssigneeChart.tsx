@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
 
-interface AssigneeRow {
-  assignee: string;
+interface DealerRow {
+  dealer: string;
   total: number;
   open: number;
   approved: number;
@@ -14,7 +14,7 @@ interface AssigneeRow {
 }
 
 interface Props {
-  data: AssigneeRow[];
+  data: DealerRow[];
   loading: boolean;
 }
 
@@ -32,20 +32,20 @@ export default function ByAssigneeChart({ data, loading }: Props) {
   if (!data?.length) {
     return (
       <div className="flex items-center justify-center h-64 text-text-muted text-sm">
-        No assignee data available
+        No dealer data available
       </div>
     );
   }
 
   const sorted = [...data].sort((a, b) => a.open - b.open).slice(0, 20);
-  const names = sorted.map(d => d.assignee);
+  const names = sorted.map(d => d.dealer);
   const openValues = sorted.map(d => d.open);
 
   const chartHeight = Math.max(320, 60 + sorted.length * 36);
 
   const option = {
     backgroundColor: 'transparent',
-    grid: { left: 130, right: 60, top: 16, bottom: 24 },
+    grid: { left: 160, right: 60, top: 16, bottom: 24 },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -57,7 +57,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
         const idx = params[0].dataIndex;
         const row = sorted[idx];
         return `<div style="color:${c.tooltipText}">
-          <div style="font-weight:600;margin-bottom:6px">${row.assignee}</div>
+          <div style="font-weight:600;margin-bottom:6px">${row.dealer}</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap">
             <span style="color:#58a6ff">Open: <b>${row.open}</b></span>
             <span style="color:#3fb950">Approved: <b>${row.approved}</b></span>
@@ -79,7 +79,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
       axisLabel: {
         color: c.axisLabel,
         fontSize: 11,
-        width: 120,
+        width: 148,
         overflow: 'truncate',
       },
       axisTick: { show: false },
@@ -109,9 +109,9 @@ export default function ByAssigneeChart({ data, loading }: Props) {
   };
 
   const handleClick = (params: any) => {
-    const assignee = names[params.dataIndex];
-    if (assignee && assignee !== 'Unassigned') {
-      navigate(`/claims?assignee=${encodeURIComponent(assignee)}&openOnly=true`);
+    const dealer = names[params.dataIndex];
+    if (dealer && dealer !== 'Unknown') {
+      navigate(`/claims?dealer=${encodeURIComponent(dealer)}&openOnly=true`);
     }
   };
 
@@ -124,7 +124,7 @@ export default function ByAssigneeChart({ data, loading }: Props) {
         onEvents={{ click: handleClick }}
       />
       <p className="text-center text-xs text-text-muted mt-1">
-        Click a bar to view open claims by assignee
+        Click a bar to view open claims by dealer
       </p>
     </div>
   );
