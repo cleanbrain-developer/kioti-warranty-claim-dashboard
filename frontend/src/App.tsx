@@ -1,5 +1,5 @@
 import React, { useEffect, Component } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Header from './components/layout/Header';
 import Navigation from './components/layout/Navigation';
@@ -32,6 +32,12 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
   }
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { search } = useLocation();
+  if (new URLSearchParams(search).get('mode') === 'admin') return <>{children}</>;
+  return <Navigate to="/" replace />;
+}
+
 function AppInner() {
   const { theme, timezone } = useStore();
 
@@ -59,7 +65,7 @@ function AppInner() {
             <Route path="/" element={<InsightsPage />} />
             <Route path="/claims" element={<ClaimsPage />} />
             <Route path="/aging" element={<AgingPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
