@@ -186,24 +186,13 @@ export default function AgingPage() {
       </div>
 
       {/* Aging charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">
-            Aging by Dealer
-          </h2>
-          {isLoading ? <SkeletonChart height={300} /> : (
-            <AgingStackedBar rows={data?.byDealer || []} dimension="dealer" />
-          )}
-        </div>
-
-        <div className="card p-5">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">
-            Aging by Model
-          </h2>
-          {isLoading ? <SkeletonChart height={300} /> : (
-            <AgingStackedBar rows={data?.byModel || []} dimension="model" />
-          )}
-        </div>
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">
+          Aging by Dealer
+        </h2>
+        {isLoading ? <SkeletonChart height={300} /> : (
+          <AgingStackedBar rows={data?.byDealer || []} dimension="dealer" />
+        )}
       </div>
 
       {/* Oldest open claims table */}
