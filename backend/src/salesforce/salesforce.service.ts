@@ -150,25 +150,45 @@ export class SalesforceService {
       this.fieldMapLoaded = true;
       this.logger.log('Loaded field mapping from DB');
 
-      // If dealerLookup is missing from the cached mapping, discover it now via describe
-      if (!this.claimFieldMap.dealerLookup) {
+      const needsPatch = !this.claimFieldMap.dealerLookup || !this.claimFieldMap.totalAmount;
+      if (needsPatch) {
         try {
           const desc = await this.describe(this.claimObject);
-          const accountRefField = desc.fields.find(f =>
-            f.type === 'reference' &&
-            f.referenceTo?.some(r => r.toLowerCase() === 'account'),
-          );
-          if (accountRefField) {
-            this.claimFieldMap.dealerLookup = accountRefField.name;
-            await this.prisma.fieldMapping.upsert({
-              where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'dealerLookup' } },
-              update: { fieldName: accountRefField.name },
-              create: { objectName: this.claimObject, fieldKey: 'dealerLookup', fieldName: accountRefField.name },
-            });
-            this.logger.log(`[FieldMap] dealerLookup patched from describe: ${accountRefField.name}`);
+
+          // Patch dealerLookup if missing
+          if (!this.claimFieldMap.dealerLookup) {
+            const accountRefField = desc.fields.find(f =>
+              f.type === 'reference' &&
+              f.referenceTo?.some(r => r.toLowerCase() === 'account'),
+            );
+            if (accountRefField) {
+              this.claimFieldMap.dealerLookup = accountRefField.name;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'dealerLookup' } },
+                update: { fieldName: accountRefField.name },
+                create: { objectName: this.claimObject, fieldKey: 'dealerLookup', fieldName: accountRefField.name },
+              });
+              this.logger.log(`[FieldMap] dealerLookup patched: ${accountRefField.name}`);
+            }
+          }
+
+          // Patch totalAmount if missing — use heuristic scoring across all currency fields
+          if (!this.claimFieldMap.totalAmount) {
+            const currencyFields = desc.fields.filter(f => f.type === 'currency');
+            this.logger.log(`[FieldMap] totalAmount missing. Currency fields: ${currencyFields.map(f => f.name).join(', ') || '(none)'}`);
+            const picked = this.pickBestAmountField(currencyFields, ['labor', 'part', 'tax', 'discount', 'fee', 'misc', 'other', 'adjust']);
+            if (picked) {
+              this.claimFieldMap.totalAmount = picked;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'totalAmount' } },
+                update: { fieldName: picked },
+                create: { objectName: this.claimObject, fieldKey: 'totalAmount', fieldName: picked },
+              });
+              this.logger.log(`[FieldMap] totalAmount patched: ${picked} (heuristic)`);
+            }
           }
         } catch (err) {
-          this.logger.warn(`[FieldMap] Could not patch dealerLookup: ${err.message}`);
+          this.logger.warn(`[FieldMap] Could not patch missing fields: ${err.message}`);
         }
       }
       return;
