@@ -32,20 +32,22 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
   }
 }
 
+const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 function AppInner() {
-  const { theme, timezone } = useStore();
+  const { theme } = useStore();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    api.trackVisit(sessionId, timezone).catch(() => {});
-  }, [timezone]);
+    api.trackVisit(sessionId, browserTz).catch(() => {});
+  }, []);
 
   useQuery({
-    queryKey: ['visitors', 'today', timezone],
-    queryFn: () => api.getTodayVisitors(timezone),
+    queryKey: ['visitors', 'today', browserTz],
+    queryFn: () => api.getTodayVisitors(browserTz),
     refetchInterval: 60_000,
   });
 

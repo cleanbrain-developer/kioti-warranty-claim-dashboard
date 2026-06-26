@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Users, Sun, Moon, Globe, Database } from 'lucide-react';
+import { RefreshCw, Users, Sun, Moon, Database } from 'lucide-react';
 import { api } from '../../api/client';
 import { useStore } from '../../store/useStore';
-import { TIMEZONE_OPTIONS } from '../../types';
 import SyncModal from '../ui/SyncModal';
 import FieldMappingModal from '../ui/FieldMappingModal';
+
+const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 export default function Header() {
   const [syncOpen, setSyncOpen] = useState(false);
   const [fieldMappingOpen, setFieldMappingOpen] = useState(false);
-  const { timezone, setTimezone, theme, toggleTheme } = useStore();
+  const { theme, toggleTheme } = useStore();
   const qc = useQueryClient();
   const wasSyncing = useRef(false);
 
@@ -30,8 +31,8 @@ export default function Header() {
   }, [syncStatus?.isSyncing, qc]);
 
   const { data: visitors } = useQuery({
-    queryKey: ['visitors', 'today', timezone],
-    queryFn: () => api.getTodayVisitors(timezone),
+    queryKey: ['visitors', 'today', browserTz],
+    queryFn: () => api.getTodayVisitors(browserTz),
     refetchInterval: 60_000,
   });
 
@@ -39,11 +40,9 @@ export default function Header() {
   const lastSyncLabel = lastSync
     ? new Date(lastSync.completedAt).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-        timeZone: timezone === 'local' ? undefined : timezone,
+        timeZone: browserTz,
       })
     : 'Never';
-
-  const currentTz = TIMEZONE_OPTIONS.find(o => o.value === timezone) || TIMEZONE_OPTIONS[0];
 
   return (
     <>
@@ -73,24 +72,6 @@ export default function Header() {
 
           {/* Right controls */}
           <div className="flex items-center gap-3">
-            {/* Timezone selector */}
-            <div className="flex items-center gap-1.5 text-text-secondary">
-              <Globe size={13} />
-              <select
-                value={timezone}
-                onChange={e => setTimezone(e.target.value)}
-                className="bg-transparent text-xs text-text-secondary focus:outline-none cursor-pointer hover:text-text-primary transition-colors"
-              >
-                {TIMEZONE_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value} className="bg-bg-elevated text-text-primary">
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="w-px h-4 bg-border" />
-
             {/* Last sync info */}
             <div className="hidden sm:flex items-center gap-1.5 text-text-muted text-xs">
               <span>Last sync:</span>

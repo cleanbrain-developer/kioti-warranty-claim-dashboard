@@ -19,13 +19,15 @@ interface Props {
   hasNextPage?: boolean;
 }
 
-function formatDate(dateStr: string | null, tz: string): string {
+const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
   try {
     const d = new Date(dateStr);
     return new Intl.DateTimeFormat('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
-      timeZone: tz === 'local' ? undefined : tz,
+      timeZone: browserTz,
     }).format(d);
   } catch {
     return '—';
@@ -56,7 +58,7 @@ const COLS = [
 export default function ClaimsTable({
   data, loading, isFetchingMore, sortBy, sortDir, onSort, page, onPageChange, onLoadMore, hasNextPage,
 }: Props) {
-  const { scrollMode, timezone } = useStore();
+  const { scrollMode } = useStore();
   const observerRef = useRef<IntersectionObserver | null>(null);
 
   const sentinelRef = useCallback((node: HTMLDivElement | null) => {
@@ -153,12 +155,12 @@ export default function ClaimsTable({
 
                     {/* Submitted Date */}
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                      {formatDate(row.submittedDate || row.sfCreatedDate, timezone)}
+                      {formatDate(row.submittedDate || row.sfCreatedDate)}
                     </td>
 
                     {/* Repair Date */}
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                      {formatDate(row.repairDate, timezone)}
+                      {formatDate(row.repairDate)}
                     </td>
 
                     {/* Status */}

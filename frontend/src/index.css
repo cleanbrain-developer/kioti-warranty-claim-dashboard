@@ -141,7 +141,7 @@
   }
 
   .table-row-hover {
-    @apply hover:bg-bg-hover transition-colors duration-100 cursor-pointer;
+    @apply hover:bg-bg-hover transition-colors duration-100 cursor-default;
   }
 
   .ellipsis {

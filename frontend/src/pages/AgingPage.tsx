@@ -6,7 +6,6 @@ import { api } from '../api/client';
 import { SkeletonCard, SkeletonChart } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
-import { useStore } from '../store/useStore';
 import { useChartColors } from '../hooks/useChartColors';
 
 const BUCKET_LABELS = ['0–30 days', '31–60 days', '61–90 days', '91–180 days', '181–365 days', '365+ days'];
@@ -108,9 +107,9 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   );
 }
 
-export default function AgingPage() {
-  const { timezone } = useStore();
+const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+export default function AgingPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['analytics', 'aging'],
     queryFn: api.getAging,
@@ -124,7 +123,7 @@ export default function AgingPage() {
     try {
       return new Intl.DateTimeFormat('en-US', {
         month: 'short', day: 'numeric', year: 'numeric',
-        timeZone: timezone === 'local' ? undefined : timezone,
+        timeZone: browserTz,
       }).format(new Date(d));
     } catch { return '—'; }
   };

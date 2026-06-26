@@ -21,6 +21,8 @@ export interface SyncProgress {
   errorMessage: string | null;
 }
 
+const BATCH_SIZE = 200;
+
 @Injectable()
 export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
@@ -170,6 +172,12 @@ export class SyncService implements OnModuleInit {
     this.logger.log(`[Sync] Phase: ${label}`);
   }
 
+  private chunk<T>(arr: T[], size: number): T[][] {
+    const result: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+    return result;
+  }
+
   async performSync(syncType: 'scheduled' | 'manual', force = false) {
     if (this.isSyncing) {
       this.logger.warn('Sync already in progress, skipping');
@@ -223,97 +231,116 @@ export class SyncService implements OnModuleInit {
       this.progress.claimsTotal = claimsRaw.length;
       this.logger.log(`Fetched ${claimsRaw.length} claims from Salesforce`);
 
-      // ── 2. Sync Claims to DB ──────────────────────────────
+      // ── 2. Sync Claims to DB (batched transactions) ───────
       this.setPhase('syncing_claims', `Syncing ${claimsRaw.length.toLocaleString()} claims to database…`);
 
       const claimSfIds: string[] = [];
       const dealerAccountIds = new Set<string>();
-
-      for (const raw of claimsRaw) {
+      const mappedClaims = claimsRaw.map(raw => {
         const mapped = this.sf.mapClaim(raw);
         claimSfIds.push(raw.Id);
         if (mapped.dealerAccountId) dealerAccountIds.add(mapped.dealerAccountId);
+        return mapped;
+      });
 
-        await this.prisma.warrantyClaim.upsert({
-          where: { sfId: mapped.sfId },
-          update: {
-            claimNumber: mapped.claimNumber,
-            claimType: mapped.claimType,
-            status: mapped.status,
-            dealerAccountId: mapped.dealerAccountId,
-            dealerName: mapped.dealerName,
-            modelName: mapped.modelName,
-            serialNumber: mapped.serialNumber,
-            repairDate: mapped.repairDate,
-            submittedDate: mapped.submittedDate,
-            approvedDate: mapped.approvedDate,
-            rejectedDate: mapped.rejectedDate,
-            totalAmount: mapped.totalAmount,
-            laborAmount: mapped.laborAmount,
-            partsAmount: mapped.partsAmount,
-            hasHQProduct: mapped.hasHQProduct,
-            assignedTo: mapped.assignedTo,
-            owner: mapped.owner,
-            currencyIsoCode: mapped.currencyIsoCode,
-            sfCreatedDate: mapped.sfCreatedDate,
-            sfLastModified: mapped.sfLastModified,
-            rawData: mapped.rawData,
-          },
-          create: {
-            id: mapped.id,
-            sfId: mapped.sfId,
-            claimNumber: mapped.claimNumber,
-            claimType: mapped.claimType,
-            status: mapped.status,
-            dealerAccountId: mapped.dealerAccountId,
-            dealerName: mapped.dealerName,
-            modelName: mapped.modelName,
-            serialNumber: mapped.serialNumber,
-            repairDate: mapped.repairDate,
-            submittedDate: mapped.submittedDate,
-            approvedDate: mapped.approvedDate,
-            rejectedDate: mapped.rejectedDate,
-            totalAmount: mapped.totalAmount,
-            laborAmount: mapped.laborAmount,
-            partsAmount: mapped.partsAmount,
-            hasHQProduct: mapped.hasHQProduct,
-            assignedTo: mapped.assignedTo,
-            owner: mapped.owner,
-            currencyIsoCode: mapped.currencyIsoCode,
-            sfCreatedDate: mapped.sfCreatedDate,
-            sfLastModified: mapped.sfLastModified,
-            rawData: mapped.rawData,
-          },
-        });
-        claimsSynced++;
+      for (const batch of this.chunk(mappedClaims, BATCH_SIZE)) {
+        await this.prisma.$transaction(
+          batch.map(mapped =>
+            this.prisma.warrantyClaim.upsert({
+              where: { sfId: mapped.sfId },
+              update: {
+                claimNumber: mapped.claimNumber,
+                claimType: mapped.claimType,
+                status: mapped.status,
+                dealerAccountId: mapped.dealerAccountId,
+                dealerName: mapped.dealerName,
+                modelName: mapped.modelName,
+                serialNumber: mapped.serialNumber,
+                repairDate: mapped.repairDate,
+                submittedDate: mapped.submittedDate,
+                approvedDate: mapped.approvedDate,
+                rejectedDate: mapped.rejectedDate,
+                totalAmount: mapped.totalAmount,
+                laborAmount: mapped.laborAmount,
+                partsAmount: mapped.partsAmount,
+                hasHQProduct: mapped.hasHQProduct,
+                assignedTo: mapped.assignedTo,
+                owner: mapped.owner,
+                currencyIsoCode: mapped.currencyIsoCode,
+                sfCreatedDate: mapped.sfCreatedDate,
+                sfLastModified: mapped.sfLastModified,
+                rawData: mapped.rawData,
+              },
+              create: {
+                id: mapped.id,
+                sfId: mapped.sfId,
+                claimNumber: mapped.claimNumber,
+                claimType: mapped.claimType,
+                status: mapped.status,
+                dealerAccountId: mapped.dealerAccountId,
+                dealerName: mapped.dealerName,
+                modelName: mapped.modelName,
+                serialNumber: mapped.serialNumber,
+                repairDate: mapped.repairDate,
+                submittedDate: mapped.submittedDate,
+                approvedDate: mapped.approvedDate,
+                rejectedDate: mapped.rejectedDate,
+                totalAmount: mapped.totalAmount,
+                laborAmount: mapped.laborAmount,
+                partsAmount: mapped.partsAmount,
+                hasHQProduct: mapped.hasHQProduct,
+                assignedTo: mapped.assignedTo,
+                owner: mapped.owner,
+                currencyIsoCode: mapped.currencyIsoCode,
+                sfCreatedDate: mapped.sfCreatedDate,
+                sfLastModified: mapped.sfLastModified,
+                rawData: mapped.rawData,
+              },
+            }),
+          ),
+          { timeout: 30000 },
+        );
+        claimsSynced += batch.length;
         this.progress.claimsSynced = claimsSynced;
       }
+
+      // Pre-build sfId → DB id map (avoids per-record findUnique later)
+      const claimRows = await this.prisma.warrantyClaim.findMany({
+        where: { sfId: { in: claimSfIds } },
+        select: { id: true, sfId: true },
+      });
+      const claimIdMap = new Map(claimRows.map(r => [r.sfId, r.id]));
 
       // ── 2.5. Sync Dealer Accounts ─────────────────────────
       const dealerIds = [...dealerAccountIds];
       if (dealerIds.length) {
         this.setPhase('syncing_dealers', `Syncing ${dealerIds.length} dealer accounts…`);
         const accountsRaw = await this.sf.getDealerAccounts(dealerIds);
-        for (const r of accountsRaw) {
-          await this.prisma.dealerAccount.upsert({
-            where: { sfId: r.Id },
-            update: {
-              name: r.Name ?? null,
-              phone: r.Phone ?? null,
-              city: r.BillingCity ?? null,
-              state: r.BillingState ?? null,
-              rawData: r,
-            },
-            create: {
-              sfId: r.Id,
-              name: r.Name ?? null,
-              phone: r.Phone ?? null,
-              city: r.BillingCity ?? null,
-              state: r.BillingState ?? null,
-              rawData: r,
-            },
-          });
-          dealersSynced++;
+
+        for (const batch of this.chunk(accountsRaw, BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r =>
+              this.prisma.dealerAccount.upsert({
+                where: { sfId: r.Id },
+                update: {
+                  name: r.Name ?? null,
+                  phone: r.Phone ?? null,
+                  city: r.BillingCity ?? null,
+                  state: r.BillingState ?? null,
+                  rawData: r,
+                },
+                create: {
+                  sfId: r.Id,
+                  name: r.Name ?? null,
+                  phone: r.Phone ?? null,
+                  city: r.BillingCity ?? null,
+                  state: r.BillingState ?? null,
+                  rawData: r,
+                },
+              }),
+            ),
+          );
+          dealersSynced += batch.length;
           this.progress.dealersSynced = dealersSynced;
         }
       }
@@ -323,45 +350,51 @@ export class SyncService implements OnModuleInit {
         this.setPhase('syncing_hq', `Syncing HQ Claims for ${claimSfIds.length.toLocaleString()} claims…`);
 
         const hqRaw = await this.sf.getHQClaimsWithParent(claimSfIds);
-        for (const r of hqRaw) {
-          const parentClaim = await this.prisma.warrantyClaim.findUnique({
-            where: { sfId: r._claimSfId },
-          });
-          if (!parentClaim) continue;
+        const hqWithParent = hqRaw.filter(r => claimIdMap.has(r._claimSfId));
+        const hqParentIds = new Set<string>();
 
-          await this.prisma.hQClaim.upsert({
-            where: { sfId: r.Id },
-            update: {
-              hqClaimNumber: r.Name,
-              status: r.Status__c ?? null,
-              judgmentResult: r.JudgmentResult__c ?? null,
-              judgedDate: r.JudgedDate__c ? new Date(r.JudgedDate__c) : null,
-              totalAmount: r._amount != null ? Number(r._amount) : null,
-              currencyIsoCode: r._currency ?? null,
-              sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-              rawData: r,
-            },
-            create: {
-              sfId: r.Id,
-              claimId: parentClaim.id,
-              hqClaimNumber: r.Name,
-              status: r.Status__c ?? null,
-              judgmentResult: r.JudgmentResult__c ?? null,
-              judgedDate: r.JudgedDate__c ? new Date(r.JudgedDate__c) : null,
-              totalAmount: r._amount != null ? Number(r._amount) : null,
-              currencyIsoCode: r._currency ?? null,
-              sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-              rawData: r,
-            },
-          });
+        for (const batch of this.chunk(hqWithParent, BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const claimId = claimIdMap.get(r._claimSfId)!;
+              hqParentIds.add(claimId);
+              return this.prisma.hQClaim.upsert({
+                where: { sfId: r.Id },
+                update: {
+                  hqClaimNumber: r.Name,
+                  status: r.Status__c ?? null,
+                  judgmentResult: r.JudgmentResult__c ?? null,
+                  judgedDate: r.JudgedDate__c ? new Date(r.JudgedDate__c) : null,
+                  totalAmount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+                create: {
+                  sfId: r.Id,
+                  claimId,
+                  hqClaimNumber: r.Name,
+                  status: r.Status__c ?? null,
+                  judgmentResult: r.JudgmentResult__c ?? null,
+                  judgedDate: r.JudgedDate__c ? new Date(r.JudgedDate__c) : null,
+                  totalAmount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+              });
+            }),
+          );
+          hqClaimsSynced += batch.length;
+          this.progress.hqSynced = hqClaimsSynced;
+        }
 
-          await this.prisma.warrantyClaim.update({
-            where: { id: parentClaim.id },
+        // Bulk-mark parent claims as hasHQProduct
+        if (hqParentIds.size > 0) {
+          await this.prisma.warrantyClaim.updateMany({
+            where: { id: { in: [...hqParentIds] } },
             data: { hasHQProduct: true },
           });
-
-          hqClaimsSynced++;
-          this.progress.hqSynced = hqClaimsSynced;
         }
       }
 
@@ -370,45 +403,46 @@ export class SyncService implements OnModuleInit {
         this.setPhase('syncing_orders', 'Syncing Financial Orders…');
 
         const ordersRaw = await this.sf.getFinancialOrders(claimSfIds);
+        const ordersWithParent = ordersRaw.filter(r => claimIdMap.has(r._claimSfId));
         const orderSfIds: string[] = [];
 
-        for (const r of ordersRaw) {
-          const parentClaim = await this.prisma.warrantyClaim.findUnique({
-            where: { sfId: r._claimSfId },
-          });
-          if (!parentClaim) continue;
-
-          await this.prisma.financialOrder.upsert({
-            where: { sfId: r.Id },
-            update: {
-              orderNumber: r.Name,
-              orderType: r.Type__c ?? null,
-              status: r.Status__c ?? null,
-              amount: r._amount != null ? Number(r._amount) : null,
-              currencyIsoCode: r._currency ?? null,
-              orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
-              erpStatus: r._erpStatus ?? null,
-              erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
-              sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-              rawData: r,
-            },
-            create: {
-              sfId: r.Id,
-              claimId: parentClaim.id,
-              orderNumber: r.Name,
-              orderType: r.Type__c ?? null,
-              status: r.Status__c ?? null,
-              amount: r._amount != null ? Number(r._amount) : null,
-              currencyIsoCode: r._currency ?? null,
-              orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
-              erpStatus: r._erpStatus ?? null,
-              erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
-              sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-              rawData: r,
-            },
-          });
-          orderSfIds.push(r.Id);
-          ordersSynced++;
+        for (const batch of this.chunk(ordersWithParent, BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const claimId = claimIdMap.get(r._claimSfId)!;
+              orderSfIds.push(r.Id);
+              return this.prisma.financialOrder.upsert({
+                where: { sfId: r.Id },
+                update: {
+                  orderNumber: r.Name,
+                  orderType: r.Type__c ?? null,
+                  status: r.Status__c ?? null,
+                  amount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
+                  erpStatus: r._erpStatus ?? null,
+                  erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+                create: {
+                  sfId: r.Id,
+                  claimId,
+                  orderNumber: r.Name,
+                  orderType: r.Type__c ?? null,
+                  status: r.Status__c ?? null,
+                  amount: r._amount != null ? Number(r._amount) : null,
+                  currencyIsoCode: r._currency ?? null,
+                  orderDate: r.OrderDate__c ? new Date(r.OrderDate__c) : null,
+                  erpStatus: r._erpStatus ?? null,
+                  erpErrorMessage: r._erpErrorMessage ? String(r._erpErrorMessage).slice(0, 500) : null,
+                  sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                  rawData: r,
+                },
+              });
+            }),
+          );
+          ordersSynced += batch.length;
           this.progress.ordersSynced = ordersSynced;
         }
 
@@ -416,39 +450,48 @@ export class SyncService implements OnModuleInit {
         if (orderSfIds.length) {
           this.setPhase('syncing_docs', `Syncing Billing Documents for ${orderSfIds.length} orders…`);
 
-          const docsRaw = await this.sf.getBillingDocuments(orderSfIds);
-          for (const r of docsRaw) {
-            const parentOrder = await this.prisma.financialOrder.findUnique({
-              where: { sfId: r._orderSfId },
-            });
-            if (!parentOrder) continue;
+          // Pre-build order sfId → DB id map
+          const orderRows = await this.prisma.financialOrder.findMany({
+            where: { sfId: { in: orderSfIds } },
+            select: { id: true, sfId: true },
+          });
+          const orderIdMap = new Map(orderRows.map(r => [r.sfId, r.id]));
 
-            await this.prisma.billingDocument.upsert({
-              where: { sfId: r.Id },
-              update: {
-                documentNumber: r.Name,
-                documentType: r.Type__c ?? null,
-                status: r.Status__c ?? null,
-                amount: r._amount != null ? Number(r._amount) : null,
-                currencyIsoCode: r._currency ?? null,
-                billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
-                sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-                rawData: r,
-              },
-              create: {
-                sfId: r.Id,
-                financialOrderId: parentOrder.id,
-                documentNumber: r.Name,
-                documentType: r.Type__c ?? null,
-                status: r.Status__c ?? null,
-                amount: r._amount != null ? Number(r._amount) : null,
-                currencyIsoCode: r._currency ?? null,
-                billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
-                sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
-                rawData: r,
-              },
-            });
-            docsSynced++;
+          const docsRaw = await this.sf.getBillingDocuments(orderSfIds);
+          const docsWithParent = docsRaw.filter(r => orderIdMap.has(r._orderSfId));
+
+          for (const batch of this.chunk(docsWithParent, BATCH_SIZE)) {
+            await this.prisma.$transaction(
+              batch.map(r => {
+                const financialOrderId = orderIdMap.get(r._orderSfId)!;
+                return this.prisma.billingDocument.upsert({
+                  where: { sfId: r.Id },
+                  update: {
+                    documentNumber: r.Name,
+                    documentType: r.Type__c ?? null,
+                    status: r.Status__c ?? null,
+                    amount: r._amount != null ? Number(r._amount) : null,
+                    currencyIsoCode: r._currency ?? null,
+                    billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
+                    sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                    rawData: r,
+                  },
+                  create: {
+                    sfId: r.Id,
+                    financialOrderId,
+                    documentNumber: r.Name,
+                    documentType: r.Type__c ?? null,
+                    status: r.Status__c ?? null,
+                    amount: r._amount != null ? Number(r._amount) : null,
+                    currencyIsoCode: r._currency ?? null,
+                    billingDate: r.BillingDate__c ? new Date(r.BillingDate__c) : null,
+                    sfCreatedDate: r.CreatedDate ? new Date(r.CreatedDate) : null,
+                    rawData: r,
+                  },
+                });
+              }),
+            );
+            docsSynced += batch.length;
             this.progress.docsSynced = docsSynced;
           }
         }

@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { Settings, Zap, RefreshCw, Clock, CheckCircle, AlertTriangle, CalendarClock } from 'lucide-react';
+
+const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function formatLocalDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: browserTz,
+  }).format(date);
+}
 import { api } from '../api/client';
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
@@ -76,7 +86,7 @@ export default function SettingsPage() {
             <p className="text-[10px] uppercase tracking-wide font-medium text-text-muted">Next Scheduled Run</p>
             {nextRun ? (
               <>
-                <p className="text-sm font-semibold text-text-primary">{format(nextRun, 'MMM d, yyyy h:mm a')}</p>
+                <p className="text-sm font-semibold text-text-primary">{formatLocalDate(nextRun)}</p>
                 <p className="text-xs text-text-muted">{formatDistanceToNow(nextRun, { addSuffix: true })}</p>
               </>
             ) : (
@@ -87,7 +97,7 @@ export default function SettingsPage() {
             <p className="text-[10px] uppercase tracking-wide font-medium text-text-muted">Last Scheduled Sync</p>
             {lastScheduledSync ? (
               <>
-                <p className="text-sm font-semibold text-text-primary">{format(lastScheduledSync, 'MMM d, yyyy h:mm a')}</p>
+                <p className="text-sm font-semibold text-text-primary">{formatLocalDate(lastScheduledSync)}</p>
                 <p className="text-xs text-text-muted">{formatDistanceToNow(lastScheduledSync, { addSuffix: true })}</p>
               </>
             ) : (

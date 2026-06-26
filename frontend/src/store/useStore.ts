@@ -2,8 +2,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface AppState {
-  timezone: string;
-  setTimezone: (tz: string) => void;
   scrollMode: 'pagination' | 'infinite';
   setScrollMode: (mode: 'pagination' | 'infinite') => void;
   sidebarCollapsed: boolean;
@@ -16,8 +14,6 @@ interface AppState {
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
-      timezone: 'local',
-      setTimezone: (tz) => set({ timezone: tz }),
       scrollMode: 'pagination',
       setScrollMode: (mode) => set({ scrollMode: mode }),
       sidebarCollapsed: false,

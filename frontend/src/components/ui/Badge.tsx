@@ -16,14 +16,14 @@ function getVariant(status: string): Variant {
 }
 
 const variants: Record<Variant, string> = {
-  default: 'bg-bg-elevated text-text-secondary border-border',
-  green: 'bg-accent-green/15 text-accent-green-light border-accent-green/30',
-  yellow: 'bg-accent-orange/15 text-accent-orange-light border-accent-orange/30',
-  orange: 'bg-orange-900/30 text-orange-400 border-orange-700/30',
-  red: 'bg-accent-red/15 text-accent-red-light border-accent-red/30',
-  blue: 'bg-accent-blue/15 text-accent-blue-light border-accent-blue/30',
-  purple: 'bg-accent-purple/15 text-accent-purple-light border-accent-purple/30',
-  gray: 'bg-bg-elevated text-text-muted border-border',
+  default: 'bg-slate-700/50 text-slate-300 border-slate-500/40',
+  green: 'bg-emerald-500/10 text-emerald-300 border-emerald-400/60',
+  yellow: 'bg-amber-500/10 text-amber-300 border-amber-400/60',
+  orange: 'bg-orange-500/10 text-orange-300 border-orange-400/60',
+  red: 'bg-red-500/10 text-red-300 border-red-400/60',
+  blue: 'bg-blue-500/10 text-blue-300 border-blue-400/60',
+  purple: 'bg-purple-500/10 text-purple-300 border-purple-400/60',
+  gray: 'bg-slate-700/40 text-slate-400 border-slate-500/30',
 };
 
 interface Props {
