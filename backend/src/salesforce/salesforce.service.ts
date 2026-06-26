@@ -200,13 +200,27 @@ export class SalesforceService {
         if (found) discovered[key] = found;
       }
 
-      // If totalAmount not found via candidates, fall back to first currency-type field
+      // If totalAmount not found via candidates, use heuristic scoring across all currency fields
       if (!discovered.totalAmount) {
-        const currencyField = desc.fields.find(f => f.type === 'currency');
-        if (currencyField) {
-          discovered.totalAmount = currencyField.name;
-          this.logger.log(`[FieldMap] totalAmount fallback to first currency field: ${currencyField.name}`);
+        const currencyFields = desc.fields.filter(f => f.type === 'currency');
+        this.logger.log(`[${this.claimObject}] All currency fields: ${currencyFields.map(f => f.name).join(', ') || '(none)'}`);
+        const picked = this.pickBestAmountField(currencyFields, ['labor', 'part', 'tax', 'discount', 'fee', 'misc', 'other', 'adjust']);
+        if (picked) {
+          discovered.totalAmount = picked;
+          this.logger.log(`[FieldMap] totalAmount → ${picked} (heuristic)`);
         }
+      }
+
+      // laborAmount fallback: prefer field containing 'labor'
+      if (!discovered.laborAmount) {
+        const f = desc.fields.find(ff => ff.type === 'currency' && ff.name.toLowerCase().includes('labor'));
+        if (f) discovered.laborAmount = f.name;
+      }
+
+      // partsAmount fallback: prefer field containing 'part' or 'material'
+      if (!discovered.partsAmount) {
+        const f = desc.fields.find(ff => ff.type === 'currency' && (ff.name.toLowerCase().includes('part') || ff.name.toLowerCase().includes('material')));
+        if (f) discovered.partsAmount = f.name;
       }
 
       // If dealerLookup wasn't found by candidate names, scan describe for any reference field pointing to Account
@@ -251,36 +265,68 @@ export class SalesforceService {
   private amountFieldCache = new Map<string, string | null>();
 
   /**
-   * Discovers the best amount field on an object.
-   * Tries named candidates first, then falls back to the first currency-type field via describe.
+   * Picks the most likely "total amount" field from a list of currency-type fields
+   * using heuristic scoring. deprioritizePatterns are sub-total field name patterns to avoid.
    */
-  async discoverAmountField(objectName: string, candidates: string[]): Promise<string | null> {
+  private pickBestAmountField(
+    fields: { name: string }[],
+    deprioritizePatterns: string[] = ['labor', 'part', 'tax', 'discount', 'fee', 'misc', 'other', 'adjust', 'deduct', 'retail', 'list', 'freight', 'shipping', 'penalty'],
+  ): string | null {
+    if (fields.length === 0) return null;
+    if (fields.length === 1) return fields[0].name;
+
+    const scored = fields.map(f => {
+      const n = f.name.toLowerCase();
+      let score = 0;
+      if (n.includes('total')) score += 10;
+      if (n.includes('amount')) score += 5;
+      if (n.includes('claim')) score += 3;
+      if (deprioritizePatterns.some(p => n.includes(p))) score -= 20;
+      score -= f.name.length * 0.05;
+      return { name: f.name, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].name;
+  }
+
+  /**
+   * Discovers the best amount field on a Salesforce object.
+   * Tries named candidates first (as hints), then uses heuristic scoring across
+   * all currency-type fields. All found currency fields are logged.
+   */
+  async discoverAmountField(objectName: string, candidates: string[] = []): Promise<string | null> {
     const cacheKey = `${objectName}:amount`;
     if (this.amountFieldCache.has(cacheKey)) return this.amountFieldCache.get(cacheKey);
     try {
       const desc = await this.describe(objectName);
-      const names = desc.fields.map(f => f.name);
-      const lower = names.map(n => n.toLowerCase());
+      const currencyFields = desc.fields.filter(f => f.type === 'currency');
 
+      this.logger.log(`[${objectName}] Currency fields: ${currencyFields.map(f => f.name).join(', ') || '(none)'}`);
+
+      if (currencyFields.length === 0) {
+        this.amountFieldCache.set(cacheKey, null);
+        return null;
+      }
+
+      // Step 1: try named candidates (exact name hints)
+      const fieldNames = currencyFields.map(f => f.name);
+      const lower = fieldNames.map(n => n.toLowerCase());
       for (const c of candidates) {
         const idx = lower.indexOf(c.toLowerCase());
         if (idx !== -1) {
-          this.amountFieldCache.set(cacheKey, names[idx]);
-          this.logger.log(`[${objectName}] Amount field: ${names[idx]}`);
-          return names[idx];
+          const picked = fieldNames[idx];
+          this.amountFieldCache.set(cacheKey, picked);
+          this.logger.log(`[${objectName}] Amount field (candidate match): ${picked}`);
+          return picked;
         }
       }
 
-      // Fallback: first currency-type field
-      const currencyField = desc.fields.find(f => f.type === 'currency');
-      if (currencyField) {
-        this.amountFieldCache.set(cacheKey, currencyField.name);
-        this.logger.log(`[${objectName}] Amount field fallback (first currency type): ${currencyField.name}`);
-        return currencyField.name;
-      }
-
-      this.amountFieldCache.set(cacheKey, null);
-      return null;
+      // Step 2: heuristic scoring across all currency fields
+      const picked = this.pickBestAmountField(currencyFields);
+      this.amountFieldCache.set(cacheKey, picked);
+      if (picked) this.logger.log(`[${objectName}] Amount field (heuristic): ${picked}`);
+      return picked;
     } catch (err) {
       this.logger.warn(`[${objectName}] discoverAmountField failed: ${err.message}`);
       this.amountFieldCache.set(cacheKey, null);
@@ -708,5 +754,8 @@ export class SalesforceService {
   resetFieldMapping() {
     this.claimFieldMap = {};
     this.fieldMapLoaded = false;
+    this.amountFieldCache.clear();
+    this.relationshipCache.clear();
+    this.erpFieldCache.clear();
   }
 }
