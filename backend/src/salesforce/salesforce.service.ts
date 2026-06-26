@@ -145,6 +145,28 @@ export class SalesforceService {
       for (const m of saved) this.claimFieldMap[m.fieldKey] = m.fieldName;
       this.fieldMapLoaded = true;
       this.logger.log('Loaded field mapping from DB');
+
+      // If dealerLookup is missing from the cached mapping, discover it now via describe
+      if (!this.claimFieldMap.dealerLookup) {
+        try {
+          const desc = await this.describe(this.claimObject);
+          const accountRefField = desc.fields.find(f =>
+            f.type === 'reference' &&
+            f.referenceTo?.some(r => r.toLowerCase() === 'account'),
+          );
+          if (accountRefField) {
+            this.claimFieldMap.dealerLookup = accountRefField.name;
+            await this.prisma.fieldMapping.upsert({
+              where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'dealerLookup' } },
+              update: { fieldName: accountRefField.name },
+              create: { objectName: this.claimObject, fieldKey: 'dealerLookup', fieldName: accountRefField.name },
+            });
+            this.logger.log(`[FieldMap] dealerLookup patched from describe: ${accountRefField.name}`);
+          }
+        } catch (err) {
+          this.logger.warn(`[FieldMap] Could not patch dealerLookup: ${err.message}`);
+        }
+      }
       return;
     }
 
@@ -155,7 +177,7 @@ export class SalesforceService {
 
       const mapping: Record<string, string[]> = {
         status: ['Status__c', 'ClaimStatus__c', 'Stage__c', 'ApprovalStatus__c'],
-        dealerLookup: ['Dealer__c', 'Account__c', 'DealerAccount__c', 'AccountId'],
+        dealerLookup: ['Dealer__c', 'Branch__c', 'Account__c', 'DealerAccount__c', 'AccountId'],
         dealerName: ['DealerName__c', 'AccountName__c'],
         model: ['Model__c', 'ModelName__c', 'ProductModel__c', 'UnitModel__c', 'EquipmentModel__c'],
         serialNumber: ['SerialNumber__c', 'VIN__c', 'UnitSerial__c', 'MachineSerialNumber__c', 'UnitSerialNumber__c'],
