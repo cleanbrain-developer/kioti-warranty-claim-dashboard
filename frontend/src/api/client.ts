@@ -22,7 +22,7 @@ export const api = {
     return request<any>(`/claims?${qs}`);
   },
   getClaim: (id: string) => request<any>(`/claims/${id}`),
-  getFilterOptions: () => request<{ statuses: string[]; dealers: string[]; assignees: string[] }>('/claims/filter-options'),
+  getFilterOptions: () => request<{ statuses: string[]; dealers: string[]; assignees: string[]; owners: string[] }>('/claims/filter-options'),
 
   // Analytics
   getOverview: () => request<any>('/analytics/overview'),

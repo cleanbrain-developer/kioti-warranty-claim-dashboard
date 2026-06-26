@@ -24,6 +24,7 @@ export default function ClaimsPage() {
     status: getParam('status'),
     dealer: getParam('dealer'),
     assignee: getParam('assignee'),
+    owner: getParam('owner'),
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),
@@ -125,7 +126,7 @@ export default function ClaimsPage() {
     <div className="space-y-4 animate-slide-up">
       <ClaimFilters
         filters={filters}
-        options={filterOptions || { statuses: [], dealers: [], assignees: [] }}
+        options={filterOptions || { statuses: [], dealers: [], assignees: [], owners: [] }}
         onChange={handleFilterChange}
         onClear={clearFilters}
         totalCount={data?.total ?? 0}

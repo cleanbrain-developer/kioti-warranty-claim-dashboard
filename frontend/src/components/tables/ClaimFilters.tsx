@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Search, SlidersHorizontal, X, List, AlignJustify, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import DatePicker from '../ui/DatePicker';
+import SearchableSelect from '../ui/SearchableSelect';
 
 interface FilterValues {
   search: string;
   status: string;
   dealer: string;
   assignee: string;
+  owner: string;
   dateFrom: string;
   dateTo: string;
   hasHQProduct: string;
@@ -18,7 +20,7 @@ interface FilterValues {
 
 interface Props {
   filters: FilterValues;
-  options: { statuses: string[]; dealers: string[]; assignees: string[] };
+  options: { statuses: string[]; dealers: string[]; assignees: string[]; owners: string[] };
   onChange: (f: Partial<FilterValues>) => void;
   onClear: () => void;
   totalCount: number;
@@ -30,7 +32,7 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
 
   const hasActiveFilters = !!(
     filters.search || filters.status || filters.dealer ||
-    filters.assignee || filters.dateFrom || filters.dateTo ||
+    filters.assignee || filters.owner || filters.dateFrom || filters.dateTo ||
     filters.hasHQProduct || filters.hasFinancialOrder || filters.hasBillingDocument
   );
 
@@ -88,56 +90,50 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
       {/* Filter fields */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-            {/* Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+            {/* Search — searches Claim#, Dealer, Serial#, HQ Claim#, Financial Order#, Billing Doc# */}
             <div className="relative xl:col-span-2">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               <input
                 type="text"
                 value={filters.search}
                 onChange={e => onChange({ search: e.target.value })}
-                placeholder="Claim #, Dealer, Model, Serial…"
+                placeholder="Claim#, HQ#, Order#, Billing#, Serial…"
                 className="input pl-8"
               />
             </div>
 
             {/* Status */}
-            <select
+            <SearchableSelect
               value={filters.status}
-              onChange={e => onChange({ status: e.target.value })}
-              className="select"
-            >
-              <option value="">All Statuses</option>
-              {options.statuses.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              onChange={v => onChange({ status: v })}
+              options={options.statuses}
+              placeholder="All Statuses"
+            />
 
-            {/* Dealer */}
-            <select
+            {/* Dealer Account */}
+            <SearchableSelect
               value={filters.dealer}
-              onChange={e => onChange({ dealer: e.target.value })}
-              className="select"
-            >
-              <option value="">All Dealers</option>
-              {options.dealers.map(d => (
-                <option key={d} value={d} title={d}>
-                  {d.length > 30 ? d.slice(0, 30) + '…' : d}
-                </option>
-              ))}
-            </select>
+              onChange={v => onChange({ dealer: v })}
+              options={options.dealers}
+              placeholder="All Dealers"
+            />
 
-            {/* Assignee */}
-            <select
+            {/* Dealer Contact (assignedTo) */}
+            <SearchableSelect
               value={filters.assignee}
-              onChange={e => onChange({ assignee: e.target.value })}
-              className="select"
-            >
-              <option value="">All Assignees</option>
-              {(options.assignees || []).map(a => (
-                <option key={a} value={a} title={a}>
-                  {a.length > 25 ? a.slice(0, 25) + '…' : a}
-                </option>
-              ))}
-            </select>
+              onChange={v => onChange({ assignee: v })}
+              options={options.assignees}
+              placeholder="All Dealer Contacts"
+            />
+
+            {/* Owner (internal SF user) */}
+            <SearchableSelect
+              value={filters.owner}
+              onChange={v => onChange({ owner: v })}
+              options={options.owners || []}
+              placeholder="All Owners"
+            />
 
             {/* Submitted From */}
             <div className="flex flex-col gap-0.5">

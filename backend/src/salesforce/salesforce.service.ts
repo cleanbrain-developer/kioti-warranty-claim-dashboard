@@ -190,6 +190,7 @@ export class SalesforceService {
         partsAmount: ['PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c'],
         hasHQProduct: ['HasHQProduct__c', 'HQProductIncluded__c', 'IsHQProduct__c', 'ContainsHQParts__c'],
         assignedTo: ['PersonInCharge__c', 'AssignedTo__c', 'AssignedUser__c', 'HandlerName__c', 'ClaimHandler__c'],
+        assetLookup: ['AssetId', 'Asset__c', 'AssetLookup__c'],
         currencyIsoCode: ['CurrencyIsoCode'],
       };
 
@@ -426,6 +427,12 @@ export class SalesforceService {
       }
     }
 
+    // Add Asset relationship fields so we can resolve serial number from Asset
+    if (f.assetLookup) {
+      const assetRel = f.assetLookup === 'AssetId' ? 'Asset' : f.assetLookup.replace('__c', '__r');
+      dealerRelFields.push(`${assetRel}.SerialNumber`, `${assetRel}.Name`);
+    }
+
     const baseFields = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate', this.claimTypeField, 'Owner.Name'];
     const allFields = [...new Set([...baseFields, ...extraFields, ...dealerRelFields])].join(', ');
 
@@ -640,14 +647,15 @@ export class SalesforceService {
     dealerAccountId: string; dealerName: string; modelName: string; serialNumber: string;
     repairDate: Date; submittedDate: Date; approvedDate: Date; rejectedDate: Date;
     totalAmount: number; laborAmount: number; partsAmount: number; hasHQProduct: boolean;
-    assignedTo: string; currencyIsoCode: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
+    assignedTo: string; owner: string; currencyIsoCode: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
   } {
     const f = this.claimFieldMap;
 
-    // Assignee: custom field first, then Owner.Name from relationship
-    const assignedTo = (f.assignedTo ? record[f.assignedTo] : null)
-      || record.Owner?.Name
-      || null;
+    // Assignee: dealer contact / person in charge (custom field only — not Owner)
+    const assignedTo = (f.assignedTo ? record[f.assignedTo] : null) ?? null;
+
+    // Owner: Salesforce record Owner (internal user)
+    const owner = record.Owner?.Name ?? null;
 
     // Dealer name: explicit field, or relationship object, or AccountId relationship
     let dealerName: string | null = null;
@@ -662,6 +670,14 @@ export class SalesforceService {
       }
     }
 
+    // Serial number: direct field first, then Asset relationship
+    let serialNumber: string | null = f.serialNumber ? (record[f.serialNumber] ?? null) : null;
+    if (!serialNumber && f.assetLookup) {
+      const assetRel = f.assetLookup === 'AssetId' ? 'Asset' : f.assetLookup.replace('__c', '__r');
+      const assetObj = record[assetRel];
+      serialNumber = assetObj?.SerialNumber || assetObj?.Name || null;
+    }
+
     return {
       id: record.Id,
       sfId: record.Id,
@@ -671,16 +687,17 @@ export class SalesforceService {
       dealerAccountId: f.dealerLookup ? record[f.dealerLookup] : null,
       dealerName,
       modelName: f.model ? record[f.model] : null,
-      serialNumber: f.serialNumber ? record[f.serialNumber] : null,
+      serialNumber,
       repairDate: f.repairDate ? (record[f.repairDate] ? new Date(record[f.repairDate]) : null) : null,
       submittedDate: f.submittedDate ? (record[f.submittedDate] ? new Date(record[f.submittedDate]) : null) : (record.CreatedDate ? new Date(record.CreatedDate) : null),
       approvedDate: f.approvedDate ? (record[f.approvedDate] ? new Date(record[f.approvedDate]) : null) : null,
       rejectedDate: f.rejectedDate ? (record[f.rejectedDate] ? new Date(record[f.rejectedDate]) : null) : null,
-      totalAmount: f.totalAmount ? (record[f.totalAmount] ? Number(record[f.totalAmount]) : null) : null,
-      laborAmount: f.laborAmount ? (record[f.laborAmount] ? Number(record[f.laborAmount]) : null) : null,
-      partsAmount: f.partsAmount ? (record[f.partsAmount] ? Number(record[f.partsAmount]) : null) : null,
+      totalAmount: f.totalAmount ? (record[f.totalAmount] != null ? Number(record[f.totalAmount]) : null) : null,
+      laborAmount: f.laborAmount ? (record[f.laborAmount] != null ? Number(record[f.laborAmount]) : null) : null,
+      partsAmount: f.partsAmount ? (record[f.partsAmount] != null ? Number(record[f.partsAmount]) : null) : null,
       hasHQProduct: f.hasHQProduct ? Boolean(record[f.hasHQProduct]) : false,
       assignedTo,
+      owner,
       currencyIsoCode: f.currencyIsoCode ? (record[f.currencyIsoCode] ?? null) : (record.CurrencyIsoCode ?? null),
       sfCreatedDate: record.CreatedDate ? new Date(record.CreatedDate) : null,
       sfLastModified: record.LastModifiedDate ? new Date(record.LastModifiedDate) : null,

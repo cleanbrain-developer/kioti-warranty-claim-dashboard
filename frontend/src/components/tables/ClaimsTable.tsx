@@ -42,7 +42,6 @@ function SortIcon({ field, sortBy, sortDir }: { field: string; sortBy: string; s
 const COLS = [
   { key: 'claimNumber', label: 'Claim #', sortable: true, width: 'w-28' },
   { key: 'dealerName', label: 'Dealer', sortable: true, width: 'w-44' },
-  { key: 'modelName', label: 'Model', sortable: true, width: 'w-28' },
   { key: 'serialNumber', label: 'Serial #', sortable: false, width: 'w-32' },
   { key: 'submittedDate', label: 'Submitted', sortable: true, width: 'w-28' },
   { key: 'repairDate', label: 'Repair Date', sortable: true, width: 'w-28' },
@@ -142,13 +141,6 @@ export default function ClaimsTable({
                     <td className="px-4 py-3">
                       <span className="text-text-primary truncate block max-w-[168px]" title={row.dealerName}>
                         {row.dealerName || '—'}
-                      </span>
-                    </td>
-
-                    {/* Model */}
-                    <td className="px-4 py-3">
-                      <span className="text-text-secondary truncate block max-w-[100px]" title={row.modelName}>
-                        {row.modelName || '—'}
                       </span>
                     </td>
 

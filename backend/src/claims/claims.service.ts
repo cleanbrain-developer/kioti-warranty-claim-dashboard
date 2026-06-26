@@ -10,6 +10,7 @@ export interface ClaimsQuery {
   dealer?: string;
   model?: string;
   assignee?: string;
+  owner?: string;
   dateFrom?: string;
   dateTo?: string;
   hasHQProduct?: string;
@@ -49,6 +50,9 @@ export class ClaimsService {
         { dealerName: { contains: q.search, mode: 'insensitive' } },
         { serialNumber: { contains: q.search, mode: 'insensitive' } },
         { modelName: { contains: q.search, mode: 'insensitive' } },
+        { hqClaims: { some: { hqClaimNumber: { contains: q.search, mode: 'insensitive' } } } },
+        { financialOrders: { some: { orderNumber: { contains: q.search, mode: 'insensitive' } } } },
+        { financialOrders: { some: { billingDocuments: { some: { documentNumber: { contains: q.search, mode: 'insensitive' } } } } } },
       ];
     }
 
@@ -56,9 +60,18 @@ export class ClaimsService {
     if (q.dealer) where.dealerName = { contains: q.dealer, mode: 'insensitive' };
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
     if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };
-    if (q.hasHQProduct === 'true') where.hasHQProduct = true;
-    if (q.hasFinancialOrder === 'true') where.financialOrders = { some: {} };
-    if (q.hasBillingDocument === 'true') where.financialOrders = { some: { billingDocuments: { some: {} } } };
+    if (q.owner) where.owner = { contains: q.owner, mode: 'insensitive' };
+
+    // Has HQ Claim: use relation (more accurate than hasHQProduct boolean)
+    if (q.hasHQProduct === 'true') where.hqClaims = { some: {} };
+
+    // Has Financial Order / Has Billing Document — resolve without overwrite
+    if (q.hasBillingDocument === 'true') {
+      // billing doc implies financial order exists (they're nested under it)
+      where.financialOrders = { some: { billingDocuments: { some: {} } } };
+    } else if (q.hasFinancialOrder === 'true') {
+      where.financialOrders = { some: {} };
+    }
 
     if (q.openOnly === 'true') {
       const closedTerms = ['approved', 'paid', 'rejected', 'closed', 'completed', 'denied', 'cancel'];
@@ -76,7 +89,7 @@ export class ClaimsService {
       if (q.dateTo) where.submittedDate.lte = new Date(q.dateTo);
     }
 
-    const validSortFields = ['submittedDate', 'repairDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo'];
+    const validSortFields = ['submittedDate', 'repairDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo', 'owner'];
     const sortBy = validSortFields.includes(q.sortBy) ? q.sortBy : 'sfCreatedDate';
     const sortDir = q.sortDir === 'asc' ? 'asc' : 'desc';
 
@@ -159,17 +172,17 @@ export class ClaimsService {
   }
 
   async getFilterOptions() {
-    const [statuses, dealers, models, assignees] = await Promise.all([
+    const [statuses, dealers, assignees, owners] = await Promise.all([
       this.prisma.warrantyClaim.groupBy({ by: ['status'], where: { status: { not: null } }, orderBy: { status: 'asc' } }),
       this.prisma.warrantyClaim.groupBy({ by: ['dealerName'], where: { dealerName: { not: null } }, orderBy: { dealerName: 'asc' } }),
-      this.prisma.warrantyClaim.groupBy({ by: ['modelName'], where: { modelName: { not: null } }, orderBy: { modelName: 'asc' } }),
       this.prisma.warrantyClaim.groupBy({ by: ['assignedTo'], where: { assignedTo: { not: null } }, orderBy: { assignedTo: 'asc' } }),
+      this.prisma.warrantyClaim.groupBy({ by: ['owner'], where: { owner: { not: null } }, orderBy: { owner: 'asc' } }),
     ]);
     return {
       statuses: statuses.map(s => s.status).filter(Boolean),
       dealers: dealers.map(d => d.dealerName).filter(Boolean),
-      models: models.map(m => m.modelName).filter(Boolean),
       assignees: assignees.map(a => a.assignedTo).filter(Boolean),
+      owners: owners.map(o => (o as any).owner).filter(Boolean),
     };
   }
 }
