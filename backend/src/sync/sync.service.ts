@@ -303,6 +303,18 @@ export class SyncService implements OnModuleInit {
         this.progress.claimsSynced = claimsSynced;
       }
 
+      // Save to raw collection table (all Salesforce fields preserved)
+      const rawSyncedAt = new Date();
+      for (const batch of this.chunk(claimsRaw, DB_BATCH_SIZE)) {
+        await this.prisma.$transaction(
+          batch.map(r => this.prisma.sfRawClaim.upsert({
+            where: { sfId: r.Id },
+            update: { data: r as any, syncedAt: rawSyncedAt },
+            create: { sfId: r.Id, data: r as any, syncedAt: rawSyncedAt },
+          })),
+        );
+      }
+
       // Pre-build sfId → DB id map (avoids per-record findUnique later)
       const claimRows = await this.prisma.warrantyClaim.findMany({
         where: { sfId: { in: claimSfIds } },
@@ -374,6 +386,21 @@ export class SyncService implements OnModuleInit {
           this.progress.hqSynced = hqClaimsSynced;
         }
 
+        // Raw collection
+        const hqRawAt = new Date();
+        for (const batch of this.chunk(hqWithParent, DB_BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const rawData = Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')));
+              return this.prisma.sfRawHqClaim.upsert({
+                where: { sfId: r.Id },
+                update: { data: rawData as any, syncedAt: hqRawAt },
+                create: { sfId: r.Id, data: rawData as any, syncedAt: hqRawAt },
+              });
+            }),
+          );
+        }
+
         if (hqParentIds.size > 0) {
           await this.prisma.warrantyClaim.updateMany({
             where: { id: { in: [...hqParentIds] } },
@@ -429,6 +456,21 @@ export class SyncService implements OnModuleInit {
           this.progress.ordersSynced = ordersSynced;
         }
 
+        // Raw collection
+        const orderRawAt = new Date();
+        for (const batch of this.chunk(ordersWithParent, DB_BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const rawData = Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')));
+              return this.prisma.sfRawFinancialOrder.upsert({
+                where: { sfId: r.Id },
+                update: { data: rawData as any, syncedAt: orderRawAt },
+                create: { sfId: r.Id, data: rawData as any, syncedAt: orderRawAt },
+              });
+            }),
+          );
+        }
+
         if (!orderSfIds.length) return;
 
         // Billing documents (depends on orders being synced first)
@@ -474,6 +516,21 @@ export class SyncService implements OnModuleInit {
           );
           docsSynced += batch.length;
           this.progress.docsSynced = docsSynced;
+        }
+
+        // Raw collection
+        const docRawAt = new Date();
+        for (const batch of this.chunk(docsWithParent, DB_BATCH_SIZE)) {
+          await this.prisma.$transaction(
+            batch.map(r => {
+              const rawData = Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')));
+              return this.prisma.sfRawBillingDoc.upsert({
+                where: { sfId: r.Id },
+                update: { data: rawData as any, syncedAt: docRawAt },
+                create: { sfId: r.Id, data: rawData as any, syncedAt: docRawAt },
+              });
+            }),
+          );
         }
       };
 

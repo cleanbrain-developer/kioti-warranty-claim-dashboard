@@ -287,6 +287,20 @@ export class SalesforceService {
   private relationshipCache = new Map<string, string | null>();
   private erpFieldCache = new Map<string, { status: string | null; error: string | null }>();
   private amountFieldCache = new Map<string, string | null>();
+  private queryableFieldCache = new Map<string, string[]>();
+
+  async getQueryableFields(objectName: string): Promise<string[]> {
+    if (this.queryableFieldCache.has(objectName)) return this.queryableFieldCache.get(objectName)!;
+    const desc = await this.describe(objectName);
+    // Compound types and encrypted strings cannot appear in SOQL SELECT
+    const nonQueryable = new Set(['address', 'location', 'base64', 'encryptedstring']);
+    const fields = desc.fields
+      .filter(f => !nonQueryable.has(f.type.toLowerCase()))
+      .map(f => f.name);
+    this.queryableFieldCache.set(objectName, fields);
+    this.logger.log(`[${objectName}] All queryable fields: ${fields.length}`);
+    return fields;
+  }
 
   /**
    * Picks the most likely "total amount" field from a list of currency-type fields
@@ -483,30 +497,27 @@ export class SalesforceService {
     await this.loadFieldMapping();
 
     const f = this.claimFieldMap;
-    const extraFields = Object.values(f)
-      .filter(v => v && !v.includes('.'))
-      .filter((v, i, a) => a.indexOf(v) === i);
 
-    // Add dealer relationship field so we can resolve dealer name
-    const dealerRelFields: string[] = [];
+    // Fetch ALL queryable fields — no guessing needed
+    const queryableFields = await this.getQueryableFields(this.claimObject);
+
+    // Relationship fields (sub-object traversal, not in describe)
+    const relationFields: string[] = ['Owner.Name'];
     if (f.dealerLookup) {
       if (f.dealerLookup === 'AccountId') {
-        dealerRelFields.push('Account.Name');
+        relationFields.push('Account.Name');
       } else if (f.dealerLookup.endsWith('__c')) {
-        dealerRelFields.push(`${f.dealerLookup.replace('__c', '__r')}.Name`);
+        relationFields.push(`${f.dealerLookup.replace('__c', '__r')}.Name`);
       }
     }
-
-    // Add Asset relationship fields so we can resolve serial number from Asset
     if (f.assetLookup) {
       const assetRel = f.assetLookup === 'AssetId' ? 'Asset' : f.assetLookup.replace('__c', '__r');
-      dealerRelFields.push(`${assetRel}.SerialNumber`, `${assetRel}.Name`);
+      relationFields.push(`${assetRel}.SerialNumber`, `${assetRel}.Name`);
     }
 
-    const baseFields = ['Id', 'Name', 'CreatedDate', 'LastModifiedDate', this.claimTypeField, 'Owner.Name'];
-    const allFields = [...new Set([...baseFields, ...extraFields, ...dealerRelFields])].join(', ');
+    const selectFields = [...new Set([...queryableFields, ...relationFields])].join(', ');
 
-    let soql = `SELECT ${allFields} FROM ${this.claimObject} WHERE ${this.claimTypeField} = '${this.claimTypeValue}'`;
+    let soql = `SELECT ${selectFields} FROM ${this.claimObject} WHERE ${this.claimTypeField} = '${this.claimTypeValue}'`;
     if (lastModifiedDate) {
       soql += ` AND LastModifiedDate >= ${lastModifiedDate.toISOString()}`;
     }
@@ -555,22 +566,14 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields via describe
-    const [amountField, currencyField] = await Promise.all([
+    // Step 2: get ALL queryable fields + discover amount/currency for working table mapping
+    const [allQueryableFields, amountField, currencyField] = await Promise.all([
+      this.getQueryableFields(this.hqClaimObject),
       this.discoverAmountField(this.hqClaimObject, ['TotalAmount__c', 'Amount__c', 'ClaimAmount__c']),
       this.discoverCurrencyCodeField(this.hqClaimObject),
     ]);
 
-    const knownExtras = [amountField, currencyField].filter(Boolean);
-
-    const workingDetails = await this.discoverWorkingFields(
-      this.hqClaimObject,
-      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
-      ['Status__c, JudgmentResult__c, JudgedDate__c', 'Status__c, JudgmentResult__c', 'Status__c', ''],
-    );
-
-    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
+    const selectFields = [...new Set(['Id', parentField, ...allQueryableFields])].join(', ');
     const batchSize = 500;
     const results: any[] = [];
 
@@ -578,7 +581,7 @@ export class SalesforceService {
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
       const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
-        const rows = await this.query(`SELECT ${allFields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`);
+        const rows = await this.query(`SELECT ${selectFields} FROM ${this.hqClaimObject} WHERE ${parentField} IN (${ids})`);
         results.push(...rows.map(r => ({
           ...r,
           _claimSfId: r[parentField],
@@ -613,25 +616,15 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields via describe (amount, currency, ERP)
-    const [erpFields, amountField, currencyField] = await Promise.all([
+    // Step 2: get ALL queryable fields + discover key fields for working table mapping
+    const [allQueryableFields, erpFields, amountField, currencyField] = await Promise.all([
+      this.getQueryableFields(this.financialOrderObject),
       this.discoverERPFields(this.financialOrderObject),
       this.discoverAmountField(this.financialOrderObject, ['Amount__c', 'TotalAmount__c', 'CreditAmount__c', 'PaymentAmount__c']),
       this.discoverCurrencyCodeField(this.financialOrderObject),
     ]);
 
-    // Known fields (from describe — guaranteed to exist)
-    const knownExtras = [amountField, currencyField, erpFields.status, erpFields.error].filter(Boolean);
-
-    // Probe-discover optional fields that may not exist
-    const workingDetails = await this.discoverWorkingFields(
-      this.financialOrderObject,
-      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
-      ['Type__c, Status__c, OrderDate__c', 'Status__c, OrderDate__c', 'Status__c', ''],
-    );
-
-    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
+    const selectFields = [...new Set(['Id', parentField, ...allQueryableFields])].join(', ');
     const batchSize = 500;
     const results: any[] = [];
 
@@ -639,7 +632,7 @@ export class SalesforceService {
     for (let i = 0; i < claimSfIds.length; i += batchSize) {
       const ids = claimSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
-        const rows = await this.query(`SELECT ${allFields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`);
+        const rows = await this.query(`SELECT ${selectFields} FROM ${this.financialOrderObject} WHERE ${parentField} IN (${ids})`);
         results.push(...rows.map(r => ({
           ...r,
           _claimSfId: r[parentField],
@@ -675,22 +668,14 @@ export class SalesforceService {
       return [];
     }
 
-    // Step 2: discover available detail fields via describe (amount, currency)
-    const [amountField, currencyField] = await Promise.all([
+    // Step 2: get ALL queryable fields + discover amount/currency for working table mapping
+    const [allQueryableFields, amountField, currencyField] = await Promise.all([
+      this.getQueryableFields(this.billingDocObject),
       this.discoverAmountField(this.billingDocObject, ['Amount__c', 'TotalAmount__c', 'BillingAmount__c', 'PaymentAmount__c']),
       this.discoverCurrencyCodeField(this.billingDocObject),
     ]);
 
-    const knownExtras = [amountField, currencyField].filter(Boolean);
-
-    const workingDetails = await this.discoverWorkingFields(
-      this.billingDocObject,
-      ['Id', 'Name', parentField, 'CreatedDate', ...knownExtras],
-      ['Type__c, Status__c, BillingDate__c', 'Status__c, BillingDate__c', 'Status__c', ''],
-    );
-
-    const fieldParts = [...knownExtras, ...(workingDetails ? [workingDetails] : [])];
-    const allFields = ['Id', 'Name', parentField, 'CreatedDate', ...fieldParts].join(', ');
+    const selectFields = [...new Set(['Id', parentField, ...allQueryableFields])].join(', ');
     const batchSize = 500;
     const results: any[] = [];
 
@@ -698,7 +683,7 @@ export class SalesforceService {
     for (let i = 0; i < orderSfIds.length; i += batchSize) {
       const ids = orderSfIds.slice(i, i + batchSize).map(id => `'${id}'`).join(', ');
       try {
-        const rows = await this.query(`SELECT ${allFields} FROM ${this.billingDocObject} WHERE ${parentField} IN (${ids})`);
+        const rows = await this.query(`SELECT ${selectFields} FROM ${this.billingDocObject} WHERE ${parentField} IN (${ids})`);
         results.push(...rows.map(r => ({
           ...r,
           _orderSfId: r[parentField],
@@ -781,5 +766,6 @@ export class SalesforceService {
     this.amountFieldCache.clear();
     this.relationshipCache.clear();
     this.erpFieldCache.clear();
+    this.queryableFieldCache.clear();
   }
 }

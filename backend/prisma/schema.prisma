@@ -172,3 +172,37 @@ model VisitorLog {
   @@unique([date, sessionId])
   @@map("visitor_logs")
 }
+
+// ── Raw Salesforce collection tables (all fields, no schema mapping) ─────────
+
+model SfRawClaim {
+  sfId     String   @id @map("sf_id")
+  data     Json
+  syncedAt DateTime @map("synced_at")
+
+  @@map("sf_raw_claims")
+}
+
+model SfRawHqClaim {
+  sfId     String   @id @map("sf_id")
+  data     Json
+  syncedAt DateTime @map("synced_at")
+
+  @@map("sf_raw_hq_claims")
+}
+
+model SfRawFinancialOrder {
+  sfId     String   @id @map("sf_id")
+  data     Json
+  syncedAt DateTime @map("synced_at")
+
+  @@map("sf_raw_financial_orders")
+}
+
+model SfRawBillingDoc {
+  sfId     String   @id @map("sf_id")
+  data     Json
+  syncedAt DateTime @map("synced_at")
+
+  @@map("sf_raw_billing_docs")
+}
