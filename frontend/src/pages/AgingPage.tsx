@@ -94,6 +94,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: c.axisLabel, fontSize: 11 },
+      inverse: true,
     },
     series,
   };
