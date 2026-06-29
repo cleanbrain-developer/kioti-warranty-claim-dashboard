@@ -211,7 +211,7 @@ export default function AgingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-elevated/50">
-                  {['Claim #', 'Dealer', 'Model', 'Submitted', 'Status', 'Amount', 'Age'].map(h => (
+                  {['Claim #', 'Dealer', 'Submitted', 'Status', 'Amount', 'Age'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wide">
                       {h}
                     </th>
@@ -227,7 +227,6 @@ export default function AgingPage() {
                     <td className="px-4 py-3">
                       <span className="text-text-primary truncate block max-w-[180px]">{claim.dealerName || '—'}</span>
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{claim.modelName || '—'}</td>
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
                       {formatDate(claim.submittedDate)}
                     </td>
