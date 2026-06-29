@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, DollarSign, Building, CreditCard, Receipt } from 'lucide-react';
+import { FileText, Building, CreditCard, Receipt } from 'lucide-react';
 import { SkeletonCard } from '../ui/Skeleton';
 import Badge from '../ui/Badge';
 
@@ -20,7 +20,7 @@ export default function KPICards({ data, loading }: Props) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
         <div className="card p-4">
@@ -45,14 +45,6 @@ export default function KPICards({ data, loading }: Props) {
       icon: <FileText size={18} />,
       color: 'text-chart-1',
       bg: 'bg-chart-1/10',
-    },
-    {
-      label: data.totalAmountSource === 'hq' ? 'Total HQ Billed' : 'Total Claim Amount',
-      value: data.totalAmount != null ? formatAmount(data.totalAmount) : '—',
-      sub: data.totalAmountSource === 'hq' ? 'Sum of HQ claim amounts' : 'Across all claims',
-      icon: <DollarSign size={18} />,
-      color: 'text-chart-5',
-      bg: 'bg-chart-5/10',
     },
     {
       label: 'HQ Claims',
@@ -85,7 +77,7 @@ export default function KPICards({ data, loading }: Props) {
   return (
     <div className="space-y-4">
       {/* Main KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {mainKpis.map((kpi) => (
           <div
             key={kpi.label}

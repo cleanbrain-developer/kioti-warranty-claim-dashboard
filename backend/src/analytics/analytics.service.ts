@@ -7,7 +7,7 @@ export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
   async getOverview() {
-    const [total, byStatus, totalAmountResult, hqCount, financialOrderCount, billingDocCount, hqAmountResult] =
+    const [total, byStatus, hqCount, financialOrderCount, billingDocCount] =
       await Promise.all([
         this.prisma.warrantyClaim.count(),
         this.prisma.warrantyClaim.groupBy({
@@ -15,20 +15,14 @@ export class AnalyticsService {
           _count: { _all: true },
           _sum: { totalAmount: true },
         }),
-        this.prisma.warrantyClaim.aggregate({ _sum: { totalAmount: true } }),
         this.prisma.hQClaim.count(),
         this.prisma.financialOrder.count(),
         this.prisma.billingDocument.count(),
-        // Fallback: total from HQ claims when claim-level amount is unavailable
-        this.prisma.hQClaim.aggregate({ _sum: { totalAmount: true } }),
       ]);
 
     const statusMap: Record<string, number> = {};
-    const amountByStatus: Record<string, number> = {};
     for (const s of byStatus) {
-      const key = s.status || 'Unassigned';
-      statusMap[key] = s._count._all;
-      amountByStatus[key] = s._sum.totalAmount ? Number(s._sum.totalAmount) : 0;
+      statusMap[s.status || 'Unassigned'] = s._count._all;
     }
 
     const openStatuses = ['Open', 'Pending', 'Submitted', 'Under Review', 'In Review', 'Pending Approval'];
@@ -51,15 +45,10 @@ export class AnalyticsService {
       .map(([status, count]) => ({ status, count }))
       .sort((a, b) => b.count - a.count);
 
-    const claimTotal = totalAmountResult._sum.totalAmount ? Number(totalAmountResult._sum.totalAmount) : 0;
-    const hqTotal = hqAmountResult._sum.totalAmount ? Math.abs(Number(hqAmountResult._sum.totalAmount)) : 0;
-
     return {
       total,
       pending,
       approved,
-      totalAmount: claimTotal || hqTotal,
-      totalAmountSource: claimTotal > 0 ? 'claims' : (hqTotal > 0 ? 'hq' : 'none'),
       hqClaimsCount: hqCount,
       financialOrdersCount: financialOrderCount,
       billingDocsCount: billingDocCount,
