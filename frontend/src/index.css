@@ -4,24 +4,24 @@
 
 /* ── Theme Variables ─────────────────────────────── */
 :root {
-  --bg-base: #0d1117;
-  --bg-card: #161b22;
-  --bg-hover: #1c2128;
-  --bg-elevated: #21262d;
-  --border-default: #30363d;
-  --border-subtle: #21262d;
-  --border-emphasis: #484f58;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #6e7681;
-  --text-link: #58a6ff;
-  --skeleton-from: #21262d;
-  --skeleton-to: #2d333b;
-  --tooltip-bg: #1c2128;
-  --tooltip-border: #30363d;
-  --tooltip-color: #e6edf3;
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --date-icon-filter: invert(60%) sepia(10%) saturate(300%) hue-rotate(180deg);
+  --bg-base: #070c18;
+  --bg-card: #0c1426;
+  --bg-hover: #111d36;
+  --bg-elevated: #172340;
+  --border-default: #1c2e4a;
+  --border-subtle: #101e35;
+  --border-emphasis: #264068;
+  --text-primary: #dde8f8;
+  --text-secondary: #8aa2c8;
+  --text-muted: #4e6888;
+  --text-link: #60a5fa;
+  --skeleton-from: #172340;
+  --skeleton-to: #1e2f50;
+  --tooltip-bg: #0c1426;
+  --tooltip-border: #1c2e4a;
+  --tooltip-color: #dde8f8;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238aa2c8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --date-icon-filter: invert(60%) sepia(20%) saturate(400%) hue-rotate(200deg);
 }
 
 [data-theme="light"] {
@@ -100,7 +100,7 @@
 @layer components {
   .card {
     @apply bg-bg-card border border-border rounded-xl;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 0 1px rgba(128,128,128,0.08);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3), 0 0 0 1px rgba(30,60,100,0.15);
   }
 
   .btn {
