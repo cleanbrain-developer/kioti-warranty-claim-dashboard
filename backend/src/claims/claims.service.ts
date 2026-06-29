@@ -93,8 +93,9 @@ export class ClaimsService {
     const sortBy = validSortFields.includes(q.sortBy) ? q.sortBy : 'sfCreatedDate';
     const sortDir = q.sortDir === 'asc' ? 'asc' : 'desc';
 
-    const [total, records] = await Promise.all([
+    const [total, totalUnfiltered, records] = await Promise.all([
       this.prisma.warrantyClaim.count({ where }),
+      this.prisma.warrantyClaim.count(),
       this.prisma.warrantyClaim.findMany({
         where,
         skip,
@@ -141,7 +142,7 @@ export class ClaimsService {
       rawData: undefined,
     }));
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { data, total, totalUnfiltered, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: string) {

@@ -24,9 +24,10 @@ interface Props {
   onChange: (f: Partial<FilterValues>) => void;
   onClear: () => void;
   totalCount: number;
+  totalUnfiltered: number;
 }
 
-export default function ClaimFilters({ filters, options, onChange, onClear, totalCount }: Props) {
+export default function ClaimFilters({ filters, options, onChange, onClear, totalCount, totalUnfiltered }: Props) {
   const [expanded, setExpanded] = useState(true);
   const { scrollMode, setScrollMode } = useStore();
 
@@ -51,9 +52,23 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
           )}
         </div>
         <div className="flex items-center gap-3">
-          {totalCount > 0 && (
+          {totalUnfiltered > 0 && (
             <span className="text-xs text-text-muted">
-              <span className="text-text-secondary font-medium">{totalCount.toLocaleString()}</span> records
+              {hasActiveFilters && totalCount !== totalUnfiltered ? (
+                <>
+                  <span className="text-accent-blue font-semibold">{totalCount.toLocaleString()}</span>
+                  <span className="mx-1">of</span>
+                  <span className="text-text-secondary font-medium">{totalUnfiltered.toLocaleString()}</span>
+                </>
+              ) : hasActiveFilters ? (
+                <>
+                  <span className="text-accent-blue font-semibold">{totalCount.toLocaleString()}</span>
+                  <span className="ml-1 text-text-muted">(all match)</span>
+                </>
+              ) : (
+                <span className="text-text-secondary font-medium">{totalCount.toLocaleString()}</span>
+              )}
+              <span className="ml-1">records</span>
             </span>
           )}
           {/* Scroll mode toggle */}

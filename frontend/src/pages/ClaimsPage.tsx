@@ -130,6 +130,7 @@ export default function ClaimsPage() {
         onChange={handleFilterChange}
         onClear={clearFilters}
         totalCount={data?.total ?? 0}
+        totalUnfiltered={data?.totalUnfiltered ?? 0}
       />
 
       <ClaimsTable
