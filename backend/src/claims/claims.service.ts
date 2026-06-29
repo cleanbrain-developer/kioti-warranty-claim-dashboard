@@ -56,7 +56,10 @@ export class ClaimsService {
       ];
     }
 
-    if (q.status) where.status = q.status;
+    if (q.status) {
+      const statuses = q.status.split(',').map((s: string) => s.trim()).filter(Boolean);
+      where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
+    }
     if (q.dealer) where.dealerName = { contains: q.dealer, mode: 'insensitive' };
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
     if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };

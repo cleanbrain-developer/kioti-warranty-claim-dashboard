@@ -3,6 +3,7 @@ import { Search, SlidersHorizontal, X, List, AlignJustify, ChevronDown, ChevronU
 import { useStore } from '../../store/useStore';
 import DatePicker from '../ui/DatePicker';
 import SearchableSelect from '../ui/SearchableSelect';
+import MultiSelect from '../ui/MultiSelect';
 
 interface FilterValues {
   search: string;
@@ -118,10 +119,10 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
               />
             </div>
 
-            {/* Status */}
-            <SearchableSelect
-              value={filters.status}
-              onChange={v => onChange({ status: v })}
+            {/* Status (multi-select) */}
+            <MultiSelect
+              values={filters.status ? filters.status.split(',').map(s => s.trim()).filter(Boolean) : []}
+              onChange={vals => onChange({ status: vals.join(',') })}
               options={options.statuses}
               placeholder="All Statuses"
             />
