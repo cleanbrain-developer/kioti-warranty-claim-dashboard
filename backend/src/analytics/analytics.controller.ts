@@ -6,13 +6,19 @@ export class AnalyticsController {
   constructor(private analyticsService: AnalyticsService) {}
 
   @Get('overview')
-  getOverview() {
-    return this.analyticsService.getOverview();
+  getOverview(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.analyticsService.getOverview(dateFrom, dateTo);
   }
 
   @Get('by-status')
-  getByStatus() {
-    return this.analyticsService.getByStatus();
+  getByStatus(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.analyticsService.getByStatus(dateFrom, dateTo);
   }
 
   @Get('by-dealer')
@@ -46,8 +52,11 @@ export class AnalyticsController {
   }
 
   @Get('financial-summary')
-  getFinancialSummary() {
-    return this.analyticsService.getFinancialSummary();
+  getFinancialSummary(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.analyticsService.getFinancialSummary(dateFrom, dateTo);
   }
 
   @Get('aging')

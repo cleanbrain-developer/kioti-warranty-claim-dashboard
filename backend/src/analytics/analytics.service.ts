@@ -6,18 +6,33 @@ import { Prisma } from '@prisma/client';
 export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getOverview() {
+  private buildDateWhere(dateFrom?: string, dateTo?: string): any {
+    if (!dateFrom && !dateTo) return {};
+    const submittedDate: any = {};
+    if (dateFrom) submittedDate.gte = new Date(dateFrom);
+    if (dateTo) {
+      const d = new Date(dateTo);
+      d.setHours(23, 59, 59, 999);
+      submittedDate.lte = d;
+    }
+    return { submittedDate };
+  }
+
+  async getOverview(dateFrom?: string, dateTo?: string) {
+    const where = this.buildDateWhere(dateFrom, dateTo);
+    const hasWhere = Object.keys(where).length > 0;
     const [total, byStatus, hqCount, financialOrderCount, billingDocCount] =
       await Promise.all([
-        this.prisma.warrantyClaim.count(),
+        this.prisma.warrantyClaim.count({ where }),
         this.prisma.warrantyClaim.groupBy({
           by: ['status'],
           _count: { _all: true },
           _sum: { totalAmount: true },
+          where,
         }),
-        this.prisma.hQClaim.count(),
-        this.prisma.financialOrder.count(),
-        this.prisma.billingDocument.count(),
+        this.prisma.hQClaim.count({ where: hasWhere ? { claim: where } : {} }),
+        this.prisma.financialOrder.count({ where: hasWhere ? { claim: where } : {} }),
+        this.prisma.billingDocument.count({ where: hasWhere ? { financialOrder: { claim: where } } : {} }),
       ]);
 
     const statusMap: Record<string, number> = {};
@@ -56,12 +71,14 @@ export class AnalyticsService {
     };
   }
 
-  async getByStatus() {
+  async getByStatus(dateFrom?: string, dateTo?: string) {
+    const where = this.buildDateWhere(dateFrom, dateTo);
     const rows = await this.prisma.warrantyClaim.groupBy({
       by: ['status'],
       _count: { _all: true },
       _sum: { totalAmount: true },
       orderBy: { _count: { status: 'desc' } },
+      where,
     });
     return rows.map(r => ({
       status: r.status || 'Unassigned',
@@ -169,45 +186,72 @@ export class AnalyticsService {
     return rows.map(r => r.assignedTo).filter(Boolean);
   }
 
-  async getFinancialSummary() {
+  async getFinancialSummary(dateFrom?: string, dateTo?: string) {
+    const hasFilter = !!(dateFrom || dateTo);
+
+    if (!hasFilter) {
+      const [hqClaimed, dealerPaid, dealerOutstanding] = await Promise.all([
+        this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+          SELECT COALESCE(currency_iso_code, 'USD') as currency,
+                 ABS(COALESCE(SUM(total_amount), 0))::float as total
+          FROM hq_claims WHERE total_amount IS NOT NULL
+          GROUP BY COALESCE(currency_iso_code, 'USD') ORDER BY total DESC
+        `,
+        this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+          SELECT COALESCE(currency_iso_code, 'USD') as currency,
+                 ABS(COALESCE(SUM(amount), 0))::float as total
+          FROM billing_documents WHERE amount IS NOT NULL
+          GROUP BY COALESCE(currency_iso_code, 'USD') ORDER BY total DESC
+        `,
+        this.prisma.$queryRaw<{ currency: string; total: number }[]>`
+          SELECT COALESCE(fo.currency_iso_code, 'USD') as currency,
+                 ABS(COALESCE(SUM(fo.amount), 0))::float as total
+          FROM financial_orders fo
+          WHERE fo.amount IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM billing_documents bd WHERE bd.financial_order_id = fo.id)
+          GROUP BY COALESCE(fo.currency_iso_code, 'USD') ORDER BY total DESC
+        `,
+      ]);
+      return { hqClaimed, dealerPaid, dealerOutstanding };
+    }
+
+    const from = dateFrom ? new Date(dateFrom) : new Date('2000-01-01');
+    const to = dateTo
+      ? (() => { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); return d; })()
+      : new Date('2099-12-31');
+
     const [hqClaimed, dealerPaid, dealerOutstanding] = await Promise.all([
-      // HQ Claimed = sum of HQ Claim amounts per currency (what dealers billed to HQ Korea)
       this.prisma.$queryRaw<{ currency: string; total: number }[]>`
-        SELECT COALESCE(currency_iso_code, 'USD') as currency,
-               ABS(COALESCE(SUM(total_amount), 0))::float as total
-        FROM hq_claims
-        WHERE total_amount IS NOT NULL
-        GROUP BY COALESCE(currency_iso_code, 'USD')
-        ORDER BY total DESC
+        SELECT COALESCE(hq.currency_iso_code, 'USD') as currency,
+               ABS(COALESCE(SUM(hq.total_amount), 0))::float as total
+        FROM hq_claims hq
+        JOIN warranty_claims wc ON hq.claim_id = wc.id
+        WHERE hq.total_amount IS NOT NULL
+          AND wc.submitted_date >= ${from} AND wc.submitted_date <= ${to}
+        GROUP BY COALESCE(hq.currency_iso_code, 'USD') ORDER BY total DESC
       `,
-      // Dealer Paid = Billing Documents per currency (credit memos issued to dealers — ABS because stored as negative)
       this.prisma.$queryRaw<{ currency: string; total: number }[]>`
-        SELECT COALESCE(currency_iso_code, 'USD') as currency,
-               ABS(COALESCE(SUM(amount), 0))::float as total
-        FROM billing_documents
-        WHERE amount IS NOT NULL
-        GROUP BY COALESCE(currency_iso_code, 'USD')
-        ORDER BY total DESC
+        SELECT COALESCE(bd.currency_iso_code, 'USD') as currency,
+               ABS(COALESCE(SUM(bd.amount), 0))::float as total
+        FROM billing_documents bd
+        JOIN financial_orders fo ON bd.financial_order_id = fo.id
+        JOIN warranty_claims wc ON fo.claim_id = wc.id
+        WHERE bd.amount IS NOT NULL
+          AND wc.submitted_date >= ${from} AND wc.submitted_date <= ${to}
+        GROUP BY COALESCE(bd.currency_iso_code, 'USD') ORDER BY total DESC
       `,
-      // Dealer Outstanding = Financial Orders with no billing document yet (payment initiated but not settled)
       this.prisma.$queryRaw<{ currency: string; total: number }[]>`
         SELECT COALESCE(fo.currency_iso_code, 'USD') as currency,
                ABS(COALESCE(SUM(fo.amount), 0))::float as total
         FROM financial_orders fo
+        JOIN warranty_claims wc ON fo.claim_id = wc.id
         WHERE fo.amount IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM billing_documents bd WHERE bd.financial_order_id = fo.id
-          )
-        GROUP BY COALESCE(fo.currency_iso_code, 'USD')
-        ORDER BY total DESC
+          AND NOT EXISTS (SELECT 1 FROM billing_documents bd WHERE bd.financial_order_id = fo.id)
+          AND wc.submitted_date >= ${from} AND wc.submitted_date <= ${to}
+        GROUP BY COALESCE(fo.currency_iso_code, 'USD') ORDER BY total DESC
       `,
     ]);
-
-    return {
-      hqClaimed,
-      dealerPaid,
-      dealerOutstanding,
-    };
+    return { hqClaimed, dealerPaid, dealerOutstanding };
   }
 
   async getAging() {

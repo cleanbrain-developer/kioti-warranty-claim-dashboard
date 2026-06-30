@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
@@ -11,6 +12,8 @@ import { useChartColors } from '../hooks/useChartColors';
 const BUCKET_LABELS = ['0–30 days', '31–60 days', '61–90 days', '91–180 days', '181–365 days', '365+ days'];
 const BUCKET_KEYS = ['0_30', '31_60', '61_90', '91_180', '181_365', '365_plus'] as const;
 const BUCKET_COLORS = ['#06b6d4', '#22c55e', '#eab308', '#f97316', '#ef4444', '#991b1b'];
+// [minDays, maxDays] — age range for each bucket (used to compute submission date range for navigation)
+const BUCKET_DAYS = [[0,30],[31,60],[61,90],[91,180],[181,365],[366,3650]] as const;
 
 function AgingKPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -46,7 +49,9 @@ function AgingBucketBar({ data }: { data: Record<string, number> }) {
 
 function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer' | 'model' }) {
   const c = useChartColors();
+  const navigate = useNavigate();
   const [hoverRow, setHoverRow] = React.useState<number | null>(null);
+  const [hoverBucket, setHoverBucket] = React.useState<number | null>(null);
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!rows?.length) {
@@ -56,14 +61,22 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   const top = rows.slice(0, 12);
   const rowTotals = top.map(r => BUCKET_KEYS.reduce((s, k) => s + (r[k] || 0), 0));
 
+  const getOpacity = (rowIdx: number, bucketIdx: number): number => {
+    if (hoverRow === null) return 1;
+    if (hoverRow === rowIdx) {
+      // same dealer: hovered bucket = full, other buckets = slightly dimmed
+      return (hoverBucket === null || hoverBucket === bucketIdx) ? 1 : 0.55;
+    }
+    return 0.30; // different dealer — visible but clearly background
+  };
+
   const dataSeries = BUCKET_KEYS.map((k, i) => ({
     name: BUCKET_LABELS[i],
     type: 'bar',
     stack: 'total',
     data: top.map((r, rowIdx) => {
       const val = r[k] || 0;
-      const opacity = hoverRow === null ? 1 : hoverRow === rowIdx ? 1 : 0.08;
-      // Place the total count label on the rightmost non-zero segment for this row
+      const opacity = getOpacity(rowIdx, i);
       const isRightmost = val > 0 && BUCKET_KEYS.slice(i + 1).every(kk => !(r[kk] || 0));
       const item: any = {
         value: val,
@@ -84,9 +97,11 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     label: { show: false },
     emphasis: {
       itemStyle: {
-        shadowBlur: 14,
-        shadowColor: 'rgba(0,0,0,0.6)',
+        shadowBlur: 16,
+        shadowColor: 'rgba(0,0,0,0.55)',
         opacity: 1,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.7)',
       },
     },
   }));
@@ -94,28 +109,32 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
+      trigger: 'item',
       backgroundColor: c.tooltipBg,
       borderColor: c.tooltipBorder,
       borderWidth: 1,
       textStyle: { color: c.tooltipText, fontSize: 12 },
-      formatter: (params: any[]) => {
-        const items = params.filter(p => p.value > 0);
-        if (!items.length) return '';
-        const idx = params[0].dataIndex;
-        const name = top[idx]?.[dimension] || 'Unknown';
-        const total = rowTotals[idx];
-        let html = `<div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>`;
-        items.forEach(p => {
-          html += `<div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
-            <span>${p.marker}${p.seriesName}</span><b>${p.value}</b>
-          </div>`;
-        });
-        html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${c.tooltipBorder};display:flex;justify-content:space-between;font-weight:700">
-          <span>Total</span><span>${total}</span>
-        </div>`;
-        return html;
+      formatter: (params: any) => {
+        if (!params.value) return '';
+        const rowIdx = params.dataIndex;
+        const bucketIdx = params.seriesIndex;
+        const name = top[rowIdx]?.[dimension] || 'Unknown';
+        const total = rowTotals[rowIdx];
+        const [minDays, maxDays] = BUCKET_DAYS[bucketIdx];
+        const rangeLabel = maxDays >= 3650 ? `${minDays}+ days` : `${minDays}–${maxDays} days`;
+        return `
+          <div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>
+          <div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
+            <span>${params.marker}${params.seriesName}</span><b>${params.value}</b>
+          </div>
+          <div style="margin-top:4px;padding-top:4px;border-top:1px solid ${c.tooltipBorder};
+               display:flex;justify-content:space-between;color:${c.axisMuted};font-size:11px">
+            <span>Total open</span><span>${total}</span>
+          </div>
+          <div style="margin-top:6px;color:${c.axisMuted};font-size:10px">
+            Click to view ${rangeLabel} claims for this dealer
+          </div>
+        `;
       },
     },
     legend: {
@@ -149,11 +168,36 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
 
   const handleOver = (params: any) => {
     if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
-    if (params.componentType === 'series') setHoverRow(params.dataIndex);
+    if (params.componentType === 'series') {
+      setHoverRow(params.dataIndex);
+      setHoverBucket(params.seriesIndex);
+    }
   };
 
   const handleOut = () => {
-    leaveTimer.current = setTimeout(() => setHoverRow(null), 80);
+    leaveTimer.current = setTimeout(() => {
+      setHoverRow(null);
+      setHoverBucket(null);
+    }, 80);
+  };
+
+  const handleClick = (params: any) => {
+    if (params.componentType !== 'series' || !params.value) return;
+    const dealer = top[params.dataIndex]?.[dimension];
+    if (!dealer || dealer === 'Unknown') return;
+
+    const bucketIdx = params.seriesIndex as number;
+    const [minDays, maxDays] = BUCKET_DAYS[bucketIdx];
+    const today = new Date();
+
+    const dateTo = new Date(today);
+    dateTo.setDate(today.getDate() - minDays);
+
+    const dateFrom = new Date(today);
+    dateFrom.setDate(today.getDate() - maxDays);
+
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    navigate(`/claims?dealer=${encodeURIComponent(dealer)}&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}`);
   };
 
   return (
@@ -161,7 +205,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       option={option}
       style={{ height: Math.max(260, top.length * 30 + 80) }}
       opts={{ renderer: 'canvas' }}
-      onEvents={{ mouseover: handleOver, mouseout: handleOut }}
+      onEvents={{ mouseover: handleOver, mouseout: handleOut, click: handleClick }}
     />
   );
 }

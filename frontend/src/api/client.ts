@@ -25,17 +25,35 @@ export const api = {
   getFilterOptions: () => request<{ statuses: string[]; dealers: string[]; assignees: string[]; owners: string[] }>('/claims/filter-options'),
 
   // Analytics
-  getOverview: () => request<any>('/analytics/overview'),
-  getByStatus: () => request<any[]>('/analytics/by-status'),
+  getOverview: (opts?: { dateFrom?: string; dateTo?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.dateFrom) qs.set('dateFrom', opts.dateFrom);
+    if (opts?.dateTo) qs.set('dateTo', opts.dateTo);
+    const q = qs.toString();
+    return request<any>(`/analytics/overview${q ? `?${q}` : ''}`);
+  },
+  getByStatus: (opts?: { dateFrom?: string; dateTo?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.dateFrom) qs.set('dateFrom', opts.dateFrom);
+    if (opts?.dateTo) qs.set('dateTo', opts.dateTo);
+    const q = qs.toString();
+    return request<any[]>(`/analytics/by-status${q ? `?${q}` : ''}`);
+  },
   getByDealer: (limit = 15) => request<any[]>(`/analytics/by-dealer?limit=${limit}`),
   getByModel: (limit = 15) => request<any[]>(`/analytics/by-model?limit=${limit}`),
   getMonthlyTrend: (months = 12) => request<any[]>(`/analytics/monthly-trend?months=${months}`),
   getOpenByDealer: (limit = 20) => request<any[]>(`/analytics/open-by-dealer?limit=${limit}`),
-  getFinancialSummary: () => request<{
-    hqClaimed: { currency: string; total: number }[];
-    dealerPaid: { currency: string; total: number }[];
-    dealerOutstanding: { currency: string; total: number }[];
-  }>('/analytics/financial-summary'),
+  getFinancialSummary: (opts?: { dateFrom?: string; dateTo?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.dateFrom) qs.set('dateFrom', opts.dateFrom);
+    if (opts?.dateTo) qs.set('dateTo', opts.dateTo);
+    const q = qs.toString();
+    return request<{
+      hqClaimed: { currency: string; total: number }[];
+      dealerPaid: { currency: string; total: number }[];
+      dealerOutstanding: { currency: string; total: number }[];
+    }>(`/analytics/financial-summary${q ? `?${q}` : ''}`);
+  },
   getByAssignee: (limit = 20) => request<any[]>(`/analytics/by-assignee?limit=${limit}`),
   getAging: () => request<any>('/analytics/aging'),
 

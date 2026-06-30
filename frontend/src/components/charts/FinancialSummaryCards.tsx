@@ -54,8 +54,8 @@ export default function FinancialSummaryCards({ data, loading }: Props) {
 
   const cards = [
     {
-      label: 'Billed to HQ',
-      sublabel: 'Total amount submitted to HQ Korea',
+      label: 'Claimed to HQ',
+      sublabel: 'Total amount claimed from HQ Korea',
       rows: data.hqClaimed,
       icon: <TrendingUp size={18} />,
       color: 'text-accent-green-light',
