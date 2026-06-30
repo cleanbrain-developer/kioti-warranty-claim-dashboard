@@ -52,23 +52,75 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   }
 
   const top = rows.slice(0, 12);
+  const rowTotals = top.map(r => BUCKET_KEYS.reduce((s, k) => s + (r[k] || 0), 0));
 
-  const series = BUCKET_KEYS.map((k, i) => ({
+  const dataSeries = BUCKET_KEYS.map((k, i) => ({
     name: BUCKET_LABELS[i],
     type: 'bar',
     stack: 'total',
     data: top.map(r => r[k] || 0),
     itemStyle: { color: BUCKET_COLORS[i] },
     label: { show: false },
-    emphasis: { focus: 'series' },
+    emphasis: {
+      focus: 'series',
+      itemStyle: {
+        shadowBlur: 12,
+        shadowColor: 'rgba(0,0,0,0.5)',
+        borderWidth: 0,
+      },
+    },
+    blur: {
+      itemStyle: { opacity: 0.12 },
+    },
   }));
+
+  // Transparent series stacked on top — only purpose is to render the total label at bar end
+  const totalLabelSeries = {
+    name: '__total__',
+    type: 'bar',
+    stack: 'total',
+    data: rowTotals,
+    itemStyle: { color: 'transparent', borderColor: 'transparent' },
+    label: {
+      show: true,
+      position: 'right',
+      color: c.barLabelRight,
+      fontSize: 11,
+      fontWeight: '600',
+      formatter: (p: any) => (p.value > 0 ? String(p.value) : ''),
+    },
+    emphasis: { disabled: true },
+    blur: { itemStyle: { opacity: 0 } },
+    silent: true,
+  };
 
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      className: 'echarts-tooltip-dark',
+      backgroundColor: c.tooltipBg,
+      borderColor: c.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: c.tooltipText, fontSize: 12 },
+      formatter: (params: any[]) => {
+        const items = params.filter(p => p.seriesName !== '__total__' && p.value > 0);
+        if (!items.length) return '';
+        const idx = params[0].dataIndex;
+        const name = top[idx]?.[dimension] || 'Unknown';
+        const total = rowTotals[idx];
+        let html = `<div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>`;
+        items.forEach(p => {
+          html += `<div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
+            <span>${p.marker}${p.seriesName}</span>
+            <b>${p.value}</b>
+          </div>`;
+        });
+        html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${c.tooltipBorder};display:flex;justify-content:space-between;font-weight:700">
+          <span>Total</span><span>${total}</span>
+        </div>`;
+        return html;
+      },
     },
     legend: {
       data: BUCKET_LABELS,
@@ -77,7 +129,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       itemHeight: 6,
       bottom: 0,
     },
-    grid: { left: '2%', right: '4%', top: '4%', bottom: '60px', containLabel: true },
+    grid: { left: '2%', right: '52px', top: '4%', bottom: '60px', containLabel: true },
     xAxis: {
       type: 'value',
       axisLine: { show: false },
@@ -96,7 +148,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       axisLabel: { color: c.axisLabel, fontSize: 11 },
       inverse: true,
     },
-    series,
+    series: [...dataSeries, totalLabelSeries],
   };
 
   return (
