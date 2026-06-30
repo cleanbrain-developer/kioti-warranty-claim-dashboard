@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { useChartColors } from '../../hooks/useChartColors';
 
 interface Props {
-  data: { month: string; total: number; approved: number; rejected: number; total_amount: number }[];
+  data: { month: string; total: number; approved: number; total_amount: number }[];
   loading: boolean;
 }
 
@@ -41,7 +41,7 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
       },
     },
     legend: {
-      data: ['Total', 'Approved', 'Rejected'],
+      data: ['Total', 'Approved'],
       textStyle: { color: c.legendText, fontSize: 11 },
       itemWidth: 12,
       itemHeight: 4,
@@ -86,16 +86,6 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
         symbolSize: 5,
         lineStyle: { color: '#3fb950', width: 2 },
         itemStyle: { color: '#3fb950' },
-      },
-      {
-        name: 'Rejected',
-        type: 'line',
-        data: data.map(d => d.rejected),
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 5,
-        lineStyle: { color: '#f85149', width: 2 },
-        itemStyle: { color: '#f85149' },
       },
     ],
   };

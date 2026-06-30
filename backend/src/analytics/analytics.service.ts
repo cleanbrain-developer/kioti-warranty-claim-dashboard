@@ -128,7 +128,6 @@ export class AnalyticsService {
         TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM') as month,
         COUNT(*)::int as total,
         COUNT(CASE WHEN status ILIKE '%approved%' OR status ILIKE '%paid%' OR status ILIKE '%completed%' THEN 1 END)::int as approved,
-        COUNT(CASE WHEN status ILIKE '%rejected%' OR status ILIKE '%denied%' THEN 1 END)::int as rejected,
         COALESCE(SUM(total_amount), 0)::float as total_amount
       FROM warranty_claims
       WHERE COALESCE(submitted_date, created_at) >= ${since}
