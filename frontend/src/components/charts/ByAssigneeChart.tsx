@@ -13,10 +13,11 @@ interface DealerRow {
   pending: number;
 }
 
+const OPEN_STATUSES = 'In Review,Waiting on Dealer';
+
 interface Props {
   data: DealerRow[];
   loading: boolean;
-  statuses: string[];
 }
 
 const BAR_COLORS = [
@@ -24,7 +25,7 @@ const BAR_COLORS = [
   '#ffb74d', '#f06292', '#4db6ac', '#ba68c8', '#90a4ae',
 ];
 
-export default function ByAssigneeChart({ data, loading, statuses }: Props) {
+export default function ByAssigneeChart({ data, loading }: Props) {
   const navigate = useNavigate();
   const c = useChartColors();
 
@@ -112,15 +113,7 @@ export default function ByAssigneeChart({ data, loading, statuses }: Props) {
   const handleClick = (params: any) => {
     const dealer = names[params.dataIndex];
     if (dealer && dealer !== 'Unknown') {
-      // Open = all statuses except those containing 'approved' or 'closed'
-      const openStatuses = statuses.filter(s => {
-        const lower = s.toLowerCase();
-        return !lower.includes('approved') && !lower.includes('closed');
-      });
-      const statusParam = openStatuses.length > 0
-        ? `&status=${encodeURIComponent(openStatuses.join(','))}`
-        : '';
-      navigate(`/claims?dealer=${encodeURIComponent(dealer)}${statusParam}`);
+      navigate(`/claims?dealer=${encodeURIComponent(dealer)}&status=${encodeURIComponent(OPEN_STATUSES)}`);
     }
   };
 

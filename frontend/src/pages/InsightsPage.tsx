@@ -24,11 +24,6 @@ export default function InsightsPage() {
     queryKey: ['analytics', 'openByDealer'],
     queryFn: () => api.getOpenByDealer(20),
   });
-  const { data: filterOptions } = useQuery({
-    queryKey: ['claims', 'filter-options'],
-    queryFn: api.getFilterOptions,
-    staleTime: 10 * 60 * 1000,
-  });
   const { data: financialSummary, isLoading: loadingFinancial } = useQuery({
     queryKey: ['analytics', 'financialSummary'],
     queryFn: api.getFinancialSummary,
@@ -74,7 +69,7 @@ export default function InsightsPage() {
             Top 20 · Click bar to view in Claims tab
           </span>
         </div>
-        <ByAssigneeChart data={openByDealer || []} loading={loadingOpenByDealer} statuses={filterOptions?.statuses || []} />
+        <ByAssigneeChart data={openByDealer || []} loading={loadingOpenByDealer} />
       </div>
     </div>
   );
