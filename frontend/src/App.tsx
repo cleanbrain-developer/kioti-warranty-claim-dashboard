@@ -1,6 +1,6 @@
 import React, { useEffect, Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from './components/layout/Header';
 import Navigation from './components/layout/Navigation';
 import InsightsPage from './pages/InsightsPage';
@@ -36,14 +36,17 @@ const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 function AppInner() {
   const { theme } = useStore();
+  const qc = useQueryClient();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    api.trackVisit(sessionId, browserTz).catch(() => {});
-  }, []);
+    api.trackVisit(sessionId, browserTz)
+      .then(() => qc.invalidateQueries({ queryKey: ['visitors', 'today'] }))
+      .catch(() => {});
+  }, [qc]);
 
   useQuery({
     queryKey: ['visitors', 'today', browserTz],
