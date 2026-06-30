@@ -10,7 +10,7 @@ import { useChartColors } from '../hooks/useChartColors';
 
 const BUCKET_LABELS = ['0–30 days', '31–60 days', '61–90 days', '91–180 days', '181–365 days', '365+ days'];
 const BUCKET_KEYS = ['0_30', '31_60', '61_90', '91_180', '181_365', '365_plus'] as const;
-const BUCKET_COLORS = ['#3fb950', '#56d364', '#e3b341', '#f0883e', '#f85149', '#da3633'];
+const BUCKET_COLORS = ['#06b6d4', '#22c55e', '#eab308', '#f97316', '#ef4444', '#991b1b'];
 
 function AgingKPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
