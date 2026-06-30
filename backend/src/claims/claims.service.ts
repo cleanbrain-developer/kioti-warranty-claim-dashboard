@@ -17,6 +17,7 @@ export interface ClaimsQuery {
   hasFinancialOrder?: string;
   hasBillingDocument?: string;
   openOnly?: string;
+  scaOnly?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
 }
@@ -86,10 +87,40 @@ export class ClaimsService {
       ];
     }
 
+    // SCA claims: authorization number starts with "SCA-" — uses the exact same detection
+    // SQL as getSCAClaimsByMonth in analytics.service.ts so chart counts and list counts match
+    if (q.scaOnly === 'true') {
+      const scaRows = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM warranty_claims
+        WHERE raw_data IS NOT NULL
+          AND (
+            (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
+            OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
+            OR raw_data::text LIKE '%"SCA-%'
+          )
+      `;
+      where.id = { in: scaRows.map(r => r.id) };
+    }
+
     if (q.dateFrom || q.dateTo) {
-      where.submittedDate = {};
-      if (q.dateFrom) where.submittedDate.gte = new Date(q.dateFrom);
-      if (q.dateTo) where.submittedDate.lte = new Date(q.dateTo);
+      const dateCond: any = {};
+      if (q.dateFrom) dateCond.gte = new Date(q.dateFrom);
+      if (q.dateTo) dateCond.lte = new Date(q.dateTo);
+
+      if (q.scaOnly === 'true') {
+        // SCA monthly chart groups by COALESCE(submittedDate, createdAt) — match that here so counts line up
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { submittedDate: dateCond },
+              { AND: [{ submittedDate: null }, { createdAt: dateCond }] },
+            ],
+          },
+        ];
+      } else {
+        where.submittedDate = dateCond;
+      }
     }
 
     const validSortFields = ['submittedDate', 'repairDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo', 'owner'];

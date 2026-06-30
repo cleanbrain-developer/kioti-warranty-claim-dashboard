@@ -22,6 +22,7 @@ export class ClaimsController {
       hasFinancialOrder: query.hasFinancialOrder,
       hasBillingDocument: query.hasBillingDocument,
       openOnly: query.openOnly,
+      scaOnly: query.scaOnly,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
     });

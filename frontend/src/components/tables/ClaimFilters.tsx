@@ -16,6 +16,7 @@ interface FilterValues {
   hasHQProduct: string;
   hasFinancialOrder: string;
   hasBillingDocument: string;
+  scaOnly: string;
   limit: number;
 }
 
@@ -35,7 +36,8 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
   const hasActiveFilters = !!(
     filters.search || filters.status || filters.dealer ||
     filters.assignee || filters.owner || filters.dateFrom || filters.dateTo ||
-    filters.hasHQProduct || filters.hasFinancialOrder || filters.hasBillingDocument
+    filters.hasHQProduct || filters.hasFinancialOrder || filters.hasBillingDocument ||
+    filters.scaOnly
   );
 
   return (
@@ -50,6 +52,16 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
           <span className="text-sm font-medium text-text-primary">Filters</span>
           {hasActiveFilters && (
             <span className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse" />
+          )}
+          {filters.scaOnly === 'true' && (
+            <button
+              onClick={e => { e.stopPropagation(); onChange({ scaOnly: '' }); }}
+              className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-[#a371f7]/15 text-[#a371f7] border border-[#a371f7]/30 hover:bg-[#a371f7]/25 transition-colors"
+              title="Remove SCA Claims filter"
+            >
+              SCA Claims Only
+              <X size={11} />
+            </button>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -200,6 +212,19 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
                 />
                 <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
                   Has Billing Document
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={filters.scaOnly === 'true'}
+                  onChange={e => onChange({ scaOnly: e.target.checked ? 'true' : '' })}
+                  className="w-3.5 h-3.5 rounded cursor-pointer"
+                  style={{ accentColor: '#a371f7' }}
+                />
+                <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+                  SCA Claims Only
                 </span>
               </label>
 

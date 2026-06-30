@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useNavigate } from 'react-router-dom';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
 
@@ -15,6 +16,7 @@ function formatAmt(n: number) {
 
 export default function SCAClaimsChart({ data, loading }: Props) {
   const c = useChartColors();
+  const navigate = useNavigate();
 
   if (loading) return <SkeletonChart height={240} />;
 
@@ -104,6 +106,16 @@ export default function SCAClaimsChart({ data, loading }: Props) {
     ],
   };
 
+  const handleClick = (params: any) => {
+    const row = data[params.dataIndex];
+    if (!row) return;
+    const [y, m] = row.month.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const dateFrom = `${row.month}-01`;
+    const dateTo = `${row.month}-${String(lastDay).padStart(2, '0')}`;
+    navigate(`/claims?scaOnly=true&dateFrom=${dateFrom}&dateTo=${dateTo}`);
+  };
+
   return (
     <div>
       <div className="flex gap-6 mb-4">
@@ -116,7 +128,15 @@ export default function SCAClaimsChart({ data, loading }: Props) {
           <div className="text-xs text-text-muted">Total Amount</div>
         </div>
       </div>
-      <ReactECharts option={option} style={{ height: 240 }} opts={{ renderer: 'canvas' }} />
+      <ReactECharts
+        option={option}
+        style={{ height: 240 }}
+        opts={{ renderer: 'canvas' }}
+        onEvents={{ click: handleClick }}
+      />
+      <p className="text-center text-xs text-text-muted mt-1">
+        Click a bar to view that month's SCA claims in the Claims tab
+      </p>
     </div>
   );
 }
