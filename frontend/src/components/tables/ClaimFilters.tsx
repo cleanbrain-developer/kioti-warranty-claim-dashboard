@@ -11,6 +11,7 @@ interface FilterValues {
   dealer: string;
   assignee: string;
   owner: string;
+  dateField: string;
   dateFrom: string;
   dateTo: string;
   hasHQProduct: string;
@@ -19,6 +20,13 @@ interface FilterValues {
   scaOnly: string;
   limit: number;
 }
+
+const DATE_FIELDS: { value: string; label: string }[] = [
+  { value: 'createdDate', label: 'Created' },
+  { value: 'submittedDate', label: 'Submitted' },
+  { value: 'repairDate', label: 'Repaired' },
+  { value: 'approvedDate', label: 'Approved' },
+];
 
 interface Props {
   filters: FilterValues;
@@ -118,7 +126,7 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
       {/* Filter fields */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {/* Search — searches Claim#, Dealer, Serial#, HQ Claim#, Financial Order#, Billing Doc# */}
             <div className="relative xl:col-span-2">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
@@ -163,17 +171,39 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
               placeholder="All Owners"
             />
 
-            {/* Submitted From */}
+          </div>
+
+          {/* Date range filter — field selector + From/To, applies to whichever date field is chosen */}
+          <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">Submitted From</span>
+              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">Date Field</span>
+              <select
+                value={filters.dateField || 'submittedDate'}
+                onChange={e => onChange({ dateField: e.target.value })}
+                className="select text-xs py-1.5"
+              >
+                {DATE_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">From</span>
               <DatePicker value={filters.dateFrom} onChange={v => onChange({ dateFrom: v })} />
             </div>
 
-            {/* Submitted To */}
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">Submitted To</span>
+              <span className="text-[10px] text-text-muted pl-0.5 font-medium uppercase tracking-wide">To</span>
               <DatePicker value={filters.dateTo} onChange={v => onChange({ dateTo: v })} />
             </div>
+
+            {(filters.dateFrom || filters.dateTo) && (
+              <button
+                onClick={() => onChange({ dateFrom: '', dateTo: '' })}
+                className="btn-ghost text-xs gap-1 mb-0.5"
+              >
+                <X size={11} /> Clear Dates
+              </button>
+            )}
           </div>
 
           {/* Checkboxes + rows + clear */}

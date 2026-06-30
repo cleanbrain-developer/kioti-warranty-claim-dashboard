@@ -1,10 +1,10 @@
 import React, { useRef, useCallback } from 'react';
 import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { format } from 'date-fns';
 import Badge from '../ui/Badge';
 import { SkeletonTable } from '../ui/Skeleton';
 import EmptyState from '../ui/EmptyState';
 import { useStore } from '../../store/useStore';
+import { formatDateOnly, formatDateTimeLocal } from '../../utils/date';
 
 interface Props {
   data: any;
@@ -19,21 +19,6 @@ interface Props {
   hasNextPage?: boolean;
 }
 
-const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—';
-  try {
-    const d = new Date(dateStr);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      timeZone: browserTz,
-    }).format(d);
-  } catch {
-    return '—';
-  }
-}
-
 function SortIcon({ field, sortBy, sortDir }: { field: string; sortBy: string; sortDir: string }) {
   if (sortBy !== field) return <ChevronsUpDown size={12} className="text-text-muted" />;
   return sortDir === 'asc'
@@ -45,8 +30,11 @@ const COLS = [
   { key: 'claimNumber', label: 'Claim #', sortable: true, width: 'w-28' },
   { key: 'dealerName', label: 'Dealer', sortable: true, width: 'w-44' },
   { key: 'serialNumber', label: 'Serial #', sortable: false, width: 'w-32' },
+  { key: 'sfCreatedDate', label: 'Created', sortable: true, width: 'w-28' },
   { key: 'submittedDate', label: 'Submitted', sortable: true, width: 'w-28' },
   { key: 'repairDate', label: 'Repair Date', sortable: true, width: 'w-28' },
+  { key: 'failureDate', label: 'Failure Date', sortable: true, width: 'w-28' },
+  { key: 'approvedDate', label: 'Approved', sortable: true, width: 'w-28' },
   { key: 'status', label: 'Status', sortable: true, width: 'w-32' },
   { key: 'assignedTo', label: 'Assigned To', sortable: true, width: 'w-32' },
   { key: 'totalAmount', label: 'Amount', sortable: true, width: 'w-24' },
@@ -148,19 +136,36 @@ export default function ClaimsTable({
 
                     {/* Serial # */}
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-text-muted truncate block max-w-[120px]" title={row.serialNumber}>
-                        {row.serialNumber || '—'}
-                      </span>
+                      {row.serialNumber && (
+                        <span className="font-mono text-xs text-text-muted truncate block max-w-[120px]" title={row.serialNumber}>
+                          {row.serialNumber}
+                        </span>
+                      )}
                     </td>
 
-                    {/* Submitted Date */}
+                    {/* Created Date — true SF datetime, shown in viewer's local timezone */}
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                      {formatDate(row.submittedDate || row.sfCreatedDate)}
+                      {formatDateTimeLocal(row.sfCreatedDate)}
                     </td>
 
-                    {/* Repair Date */}
+                    {/* Submitted Date — date-only custom field, shown as authored (UTC) */}
                     <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                      {formatDate(row.repairDate)}
+                      {formatDateOnly(row.submittedDate || row.sfCreatedDate)}
+                    </td>
+
+                    {/* Repair Date — date-only custom field, shown as authored (UTC) */}
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDateOnly(row.repairDate)}
+                    </td>
+
+                    {/* Failure Date — date-only custom field, shown as authored (UTC) */}
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDateOnly(row.failureDate)}
+                    </td>
+
+                    {/* Approved Date — date-only custom field, shown as authored (UTC) */}
+                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                      {formatDateOnly(row.approvedDate)}
                     </td>
 
                     {/* Status */}

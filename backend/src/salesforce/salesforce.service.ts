@@ -36,6 +36,12 @@ export class SalesforceService {
   private claimFieldMap: Record<string, string> = {};
   private fieldMapLoaded = false;
 
+  // "Repair Date" should reflect when the unit was actually fixed, not when the
+  // problem was reported — prioritize "Fixed Date"-style names. FailureDate__c /
+  // IncidentDate__c describe when the unit broke, which belongs under failureDate instead.
+  private readonly REPAIR_DATE_CANDIDATES = ['FixedDate__c', 'Fixed_Date__c', 'RepairDate__c', 'RepairCompletedDate__c', 'ServiceDate__c', 'WorkDate__c', 'CompletionDate__c'];
+  private readonly FAILURE_DATE_CANDIDATES = ['FailureDate__c', 'DateOfFailure__c', 'IncidentDate__c', 'BreakdownDate__c'];
+
   constructor(
     private config: ConfigService,
     private prisma: PrismaService,
@@ -150,10 +156,43 @@ export class SalesforceService {
       this.fieldMapLoaded = true;
       this.logger.log('Loaded field mapping from DB');
 
-      const needsPatch = !this.claimFieldMap.dealerLookup || !this.claimFieldMap.totalAmount;
+      const repairDateMisMapped = this.FAILURE_DATE_CANDIDATES.some(
+        c => c.toLowerCase() === (this.claimFieldMap.repairDate || '').toLowerCase(),
+      );
+      const needsPatch = !this.claimFieldMap.dealerLookup || !this.claimFieldMap.totalAmount
+        || !this.claimFieldMap.failureDate || repairDateMisMapped;
       if (needsPatch) {
         try {
           const desc = await this.describe(this.claimObject);
+          const fieldNames = desc.fields.map(f => f.name);
+
+          // Discover failureDate if missing (field added after mapping was first cached)
+          if (!this.claimFieldMap.failureDate) {
+            const found = this.findField(fieldNames, this.FAILURE_DATE_CANDIDATES);
+            if (found) {
+              this.claimFieldMap.failureDate = found;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'failureDate' } },
+                update: { fieldName: found },
+                create: { objectName: this.claimObject, fieldKey: 'failureDate', fieldName: found },
+              });
+              this.logger.log(`[FieldMap] failureDate discovered: ${found}`);
+            }
+          }
+
+          // Correct repairDate if it was previously mis-mapped onto a failure-date field
+          if (repairDateMisMapped) {
+            const found = this.findField(fieldNames, this.REPAIR_DATE_CANDIDATES);
+            if (found) {
+              this.logger.log(`[FieldMap] repairDate corrected: ${this.claimFieldMap.repairDate} → ${found}`);
+              this.claimFieldMap.repairDate = found;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'repairDate' } },
+                update: { fieldName: found },
+                create: { objectName: this.claimObject, fieldKey: 'repairDate', fieldName: found },
+              });
+            }
+          }
 
           // Patch dealerLookup if missing
           if (!this.claimFieldMap.dealerLookup) {
@@ -205,7 +244,8 @@ export class SalesforceService {
         dealerName: ['DealerName__c', 'AccountName__c'],
         model: ['Model__c', 'ModelName__c', 'ProductModel__c', 'UnitModel__c', 'EquipmentModel__c'],
         serialNumber: ['SerialNumber__c', 'VIN__c', 'UnitSerial__c', 'MachineSerialNumber__c', 'UnitSerialNumber__c'],
-        repairDate: ['RepairDate__c', 'ServiceDate__c', 'FailureDate__c', 'IncidentDate__c', 'WorkDate__c'],
+        repairDate: this.REPAIR_DATE_CANDIDATES,
+        failureDate: this.FAILURE_DATE_CANDIDATES,
         submittedDate: ['SubmittedDate__c', 'SubmissionDate__c', 'ClaimDate__c'],
         approvedDate: ['ApprovedDate__c', 'ApprovalDate__c', 'ApprovedOn__c'],
         rejectedDate: ['RejectedDate__c', 'DeniedDate__c'],
@@ -700,7 +740,7 @@ export class SalesforceService {
   mapClaim(record: any): {
     id: string; sfId: string; claimNumber: string; claimType: string; status: string;
     dealerAccountId: string; dealerName: string; modelName: string; serialNumber: string;
-    repairDate: Date; submittedDate: Date; approvedDate: Date; rejectedDate: Date;
+    repairDate: Date; failureDate: Date; submittedDate: Date; approvedDate: Date; rejectedDate: Date;
     totalAmount: number; laborAmount: number; partsAmount: number; hasHQProduct: boolean;
     assignedTo: string; owner: string; currencyIsoCode: string; sfCreatedDate: Date; sfLastModified: Date; rawData: any;
   } {
@@ -744,6 +784,7 @@ export class SalesforceService {
       modelName: f.model ? record[f.model] : null,
       serialNumber,
       repairDate: f.repairDate ? (record[f.repairDate] ? new Date(record[f.repairDate]) : null) : null,
+      failureDate: f.failureDate ? (record[f.failureDate] ? new Date(record[f.failureDate]) : null) : null,
       submittedDate: f.submittedDate ? (record[f.submittedDate] ? new Date(record[f.submittedDate]) : null) : (record.CreatedDate ? new Date(record.CreatedDate) : null),
       approvedDate: f.approvedDate ? (record[f.approvedDate] ? new Date(record[f.approvedDate]) : null) : null,
       rejectedDate: f.rejectedDate ? (record[f.rejectedDate] ? new Date(record[f.rejectedDate]) : null) : null,

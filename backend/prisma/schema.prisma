@@ -19,6 +19,7 @@ model WarrantyClaim {
   modelName       String?   @map("model_name")
   serialNumber    String?   @map("serial_number")
   repairDate      DateTime? @map("repair_date")
+  failureDate     DateTime? @map("failure_date")
   submittedDate   DateTime? @map("submitted_date")
   approvedDate    DateTime? @map("approved_date")
   rejectedDate    DateTime? @map("rejected_date")

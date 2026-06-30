@@ -18,6 +18,7 @@ export class ClaimsController {
       owner: query.owner,
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
+      dateField: query.dateField,
       hasHQProduct: query.hasHQProduct,
       hasFinancialOrder: query.hasFinancialOrder,
       hasBillingDocument: query.hasBillingDocument,

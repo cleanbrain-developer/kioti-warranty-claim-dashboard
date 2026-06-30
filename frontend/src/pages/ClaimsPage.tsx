@@ -25,6 +25,7 @@ export default function ClaimsPage() {
     dealer: getParam('dealer'),
     assignee: getParam('assignee'),
     owner: getParam('owner'),
+    dateField: getParam('dateField', 'submittedDate'),
     dateFrom: getParam('dateFrom'),
     dateTo: getParam('dateTo'),
     hasHQProduct: getParam('hasHQProduct'),

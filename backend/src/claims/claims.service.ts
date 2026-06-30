@@ -18,6 +18,7 @@ export interface ClaimsQuery {
   hasBillingDocument?: string;
   openOnly?: string;
   scaOnly?: string;
+  dateField?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
 }
@@ -102,12 +103,22 @@ export class ClaimsService {
       where.id = { in: scaRows.map(r => r.id) };
     }
 
+    // Which date column the dateFrom/dateTo range applies to — defaults to submittedDate
+    // for backward compatibility with existing Aging/Insights click-through links.
+    const dateFieldMap: Record<string, string> = {
+      createdDate: 'sfCreatedDate',
+      submittedDate: 'submittedDate',
+      repairDate: 'repairDate',
+      approvedDate: 'approvedDate',
+    };
+    const targetDateField = dateFieldMap[q.dateField] || 'submittedDate';
+
     if (q.dateFrom || q.dateTo) {
       const dateCond: any = {};
       if (q.dateFrom) dateCond.gte = new Date(q.dateFrom);
       if (q.dateTo) dateCond.lte = new Date(q.dateTo);
 
-      if (q.scaOnly === 'true') {
+      if (q.scaOnly === 'true' && targetDateField === 'submittedDate') {
         // SCA monthly chart groups by COALESCE(submittedDate, createdAt) — match that here so counts line up
         where.AND = [
           ...(where.AND || []),
@@ -119,11 +130,11 @@ export class ClaimsService {
           },
         ];
       } else {
-        where.submittedDate = dateCond;
+        where[targetDateField] = dateCond;
       }
     }
 
-    const validSortFields = ['submittedDate', 'repairDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo', 'owner'];
+    const validSortFields = ['submittedDate', 'repairDate', 'failureDate', 'approvedDate', 'totalAmount', 'status', 'dealerName', 'modelName', 'claimNumber', 'sfCreatedDate', 'assignedTo', 'owner'];
     const sortBy = validSortFields.includes(q.sortBy) ? q.sortBy : 'sfCreatedDate';
     const sortDir = q.sortDir === 'asc' ? 'asc' : 'desc';
 

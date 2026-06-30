@@ -8,6 +8,7 @@ import { SkeletonCard, SkeletonChart } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
 import { useChartColors } from '../hooks/useChartColors';
+import { formatDateOnly } from '../utils/date';
 
 const BUCKET_LABELS = ['0–30 days', '31–60 days', '61–90 days', '91–180 days', '181–365 days', '365+ days'];
 const BUCKET_KEYS = ['0_30', '31_60', '61_90', '91_180', '181_365', '365_plus'] as const;
@@ -211,8 +212,6 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   );
 }
 
-const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
 export default function AgingPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['analytics', 'aging'],
@@ -222,15 +221,7 @@ export default function AgingPage() {
   const buckets = data?.buckets || {};
   const total = BUCKET_KEYS.reduce((s, k) => s + (buckets[k] || 0), 0);
 
-  const formatDate = (d: string | null) => {
-    if (!d) return '—';
-    try {
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-        timeZone: browserTz,
-      }).format(new Date(d));
-    } catch { return '—'; }
-  };
+  const formatDate = formatDateOnly;
 
   return (
     <div className="space-y-6 animate-slide-up">
