@@ -46,6 +46,8 @@ function AgingBucketBar({ data }: { data: Record<string, number> }) {
 
 function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer' | 'model' }) {
   const c = useChartColors();
+  const [hoverRow, setHoverRow] = React.useState<number | null>(null);
+  const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!rows?.length) {
     return <div className="flex items-center justify-center h-48 text-text-muted text-sm">No data</div>;
@@ -58,41 +60,36 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     name: BUCKET_LABELS[i],
     type: 'bar',
     stack: 'total',
-    data: top.map(r => r[k] || 0),
-    itemStyle: { color: BUCKET_COLORS[i] },
+    data: top.map((r, rowIdx) => {
+      const val = r[k] || 0;
+      const opacity = hoverRow === null ? 1 : hoverRow === rowIdx ? 1 : 0.08;
+      // Place the total count label on the rightmost non-zero segment for this row
+      const isRightmost = val > 0 && BUCKET_KEYS.slice(i + 1).every(kk => !(r[kk] || 0));
+      const item: any = {
+        value: val,
+        itemStyle: { color: BUCKET_COLORS[i], opacity },
+      };
+      if (isRightmost) {
+        item.label = {
+          show: hoverRow === null || hoverRow === rowIdx,
+          position: 'right',
+          color: c.barLabelRight,
+          fontSize: 11,
+          fontWeight: '600',
+          formatter: () => String(rowTotals[rowIdx]),
+        };
+      }
+      return item;
+    }),
     label: { show: false },
     emphasis: {
-      focus: 'series',
       itemStyle: {
-        shadowBlur: 12,
-        shadowColor: 'rgba(0,0,0,0.5)',
-        borderWidth: 0,
+        shadowBlur: 14,
+        shadowColor: 'rgba(0,0,0,0.6)',
+        opacity: 1,
       },
     },
-    blur: {
-      itemStyle: { opacity: 0.12 },
-    },
   }));
-
-  // Transparent series stacked on top — only purpose is to render the total label at bar end
-  const totalLabelSeries = {
-    name: '__total__',
-    type: 'bar',
-    stack: 'total',
-    data: rowTotals,
-    itemStyle: { color: 'transparent', borderColor: 'transparent' },
-    label: {
-      show: true,
-      position: 'right',
-      color: c.barLabelRight,
-      fontSize: 11,
-      fontWeight: '600',
-      formatter: (p: any) => (p.value > 0 ? String(p.value) : ''),
-    },
-    emphasis: { disabled: true },
-    blur: { itemStyle: { opacity: 0 } },
-    silent: true,
-  };
 
   const option = {
     backgroundColor: 'transparent',
@@ -104,7 +101,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       borderWidth: 1,
       textStyle: { color: c.tooltipText, fontSize: 12 },
       formatter: (params: any[]) => {
-        const items = params.filter(p => p.seriesName !== '__total__' && p.value > 0);
+        const items = params.filter(p => p.value > 0);
         if (!items.length) return '';
         const idx = params[0].dataIndex;
         const name = top[idx]?.[dimension] || 'Unknown';
@@ -112,8 +109,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
         let html = `<div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>`;
         items.forEach(p => {
           html += `<div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
-            <span>${p.marker}${p.seriesName}</span>
-            <b>${p.value}</b>
+            <span>${p.marker}${p.seriesName}</span><b>${p.value}</b>
           </div>`;
         });
         html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${c.tooltipBorder};display:flex;justify-content:space-between;font-weight:700">
@@ -148,7 +144,16 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       axisLabel: { color: c.axisLabel, fontSize: 11 },
       inverse: true,
     },
-    series: [...dataSeries, totalLabelSeries],
+    series: dataSeries,
+  };
+
+  const handleOver = (params: any) => {
+    if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
+    if (params.componentType === 'series') setHoverRow(params.dataIndex);
+  };
+
+  const handleOut = () => {
+    leaveTimer.current = setTimeout(() => setHoverRow(null), 80);
   };
 
   return (
@@ -156,6 +161,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
       option={option}
       style={{ height: Math.max(260, top.length * 30 + 80) }}
       opts={{ renderer: 'canvas' }}
+      onEvents={{ mouseover: handleOver, mouseout: handleOut }}
     />
   );
 }
