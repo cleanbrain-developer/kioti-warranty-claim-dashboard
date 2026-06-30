@@ -8,9 +8,6 @@ interface DealerRow {
   dealer: string;
   total: number;
   open: number;
-  approved: number;
-  rejected: number;
-  pending: number;
 }
 
 const OPEN_STATUSES = 'In Review,Waiting on Dealer';
@@ -59,14 +56,9 @@ export default function ByAssigneeChart({ data, loading }: Props) {
         const idx = params[0].dataIndex;
         const row = sorted[idx];
         return `<div style="color:${c.tooltipText}">
-          <div style="font-weight:600;margin-bottom:6px">${row.dealer}</div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <span style="color:#58a6ff">Open: <b>${row.open}</b></span>
-            <span style="color:#3fb950">Approved: <b>${row.approved}</b></span>
-            <span style="color:#f85149">Rejected: <b>${row.rejected}</b></span>
-            <span style="color:#e3b341">Pending: <b>${row.pending}</b></span>
-          </div>
-          <div style="margin-top:4px;color:${c.axisMuted}">Total: <b>${row.total}</b></div>
+          <div style="font-weight:700;margin-bottom:4px;font-size:13px">${row.dealer}</div>
+          <div style="color:#58a6ff">Open (In Review / Waiting on Dealer): <b>${row.open}</b></div>
+          <div style="margin-top:6px;color:${c.axisMuted};font-size:11px">Click to view in Claims tab</div>
         </div>`;
       },
     },

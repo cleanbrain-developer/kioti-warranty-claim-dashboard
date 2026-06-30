@@ -14,8 +14,6 @@ type PeriodType = 'all' | 'monthly' | 'quarterly' | 'yearly';
 interface Period { type: PeriodType; year: number; month: number; quarter: number; }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: CURRENT_YEAR - 2018 + 1 }, (_, i) => CURRENT_YEAR - i);
 
 function toDateRange(p: Period): { dateFrom?: string; dateTo?: string } {
   if (p.type === 'all') return {};
@@ -44,7 +42,7 @@ const PERIOD_TYPES: { value: PeriodType; label: string }[] = [
   { value: 'yearly', label: 'Yearly' },
 ];
 
-function PeriodFilter({ period, onChange }: { period: Period; onChange: (p: Period) => void }) {
+function PeriodFilter({ period, onChange, years }: { period: Period; onChange: (p: Period) => void; years: number[] }) {
   return (
     <div className="card px-4 py-3 flex items-center gap-3 flex-wrap">
       <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide shrink-0">Period</span>
@@ -71,7 +69,7 @@ function PeriodFilter({ period, onChange }: { period: Period; onChange: (p: Peri
             onChange={e => onChange({ ...period, year: +e.target.value })}
             className="select text-xs py-1.5"
           >
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
 
           {period.type === 'quarterly' && (
@@ -110,9 +108,16 @@ function PeriodFilter({ period, onChange }: { period: Period; onChange: (p: Peri
 // ── Page ──────────────────────────────────────────────────
 export default function InsightsPage() {
   const now = new Date();
+  const currentYear = now.getFullYear();
+  const YEARS = React.useMemo(() => {
+    const y = new Date().getFullYear();
+    // Start from 2015 to ensure all historical records are queryable
+    return Array.from({ length: y - 2015 + 1 }, (_, i) => y - i);
+  }, []);
+
   const [period, setPeriod] = useState<Period>({
     type: 'all',
-    year: CURRENT_YEAR,
+    year: currentYear,
     month: now.getMonth() + 1,
     quarter: Math.ceil((now.getMonth() + 1) / 3),
   });
@@ -151,7 +156,7 @@ export default function InsightsPage() {
   return (
     <div className="space-y-6 animate-slide-up">
       {/* Period filter */}
-      <PeriodFilter period={period} onChange={setPeriod} />
+      <PeriodFilter period={period} onChange={setPeriod} years={YEARS} />
 
       {/* KPI row */}
       <KPICards data={overview} loading={loadingOverview} />

@@ -291,11 +291,20 @@ export class AnalyticsService {
       SELECT
         TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM') as month,
         COUNT(*)::int as count,
-        COALESCE(SUM(total_amount), 0)::float as total_amount,
+        COALESCE(SUM(
+          COALESCE(
+            NULLIF(total_amount, 0),
+            COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0)
+          )
+        ), 0)::float as total_amount,
         COUNT(DISTINCT dealer_name)::int as dealer_count
       FROM warranty_claims
       WHERE raw_data IS NOT NULL
-        AND raw_data::text LIKE '%"SCA-%'
+        AND (
+          (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
+          OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
+          OR raw_data::text LIKE '%"SCA-%'
+        )
         AND COALESCE(submitted_date, created_at) IS NOT NULL
       GROUP BY TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM')
       ORDER BY month ASC

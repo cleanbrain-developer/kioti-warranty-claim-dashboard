@@ -60,7 +60,7 @@ export class ClaimsService {
       const statuses = q.status.split(',').map((s: string) => s.trim()).filter(Boolean);
       where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
     }
-    if (q.dealer) where.dealerName = { contains: q.dealer, mode: 'insensitive' };
+    if (q.dealer) where.dealerName = { equals: q.dealer, mode: 'insensitive' };
     if (q.model) where.modelName = { contains: q.model, mode: 'insensitive' };
     if (q.assignee) where.assignedTo = { contains: q.assignee, mode: 'insensitive' };
     if (q.owner) where.owner = { contains: q.owner, mode: 'insensitive' };
