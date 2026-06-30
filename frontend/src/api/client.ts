@@ -56,6 +56,8 @@ export const api = {
   },
   getByAssignee: (limit = 20) => request<any[]>(`/analytics/by-assignee?limit=${limit}`),
   getAging: () => request<any>('/analytics/aging'),
+  getHQClaimStats: () => request<any>('/analytics/hq-claim-stats'),
+  getSCAClaimsByMonth: () => request<any[]>('/analytics/sca-by-month'),
 
   // Sync
   triggerSync: (password: string, force = false) =>

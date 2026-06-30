@@ -6,6 +6,8 @@ import ByStatusChart from '../components/charts/ByStatusChart';
 import MonthlyTrendChart from '../components/charts/MonthlyTrendChart';
 import ByAssigneeChart from '../components/charts/ByAssigneeChart';
 import FinancialSummaryCards from '../components/charts/FinancialSummaryCards';
+import HQClaimStatsChart from '../components/charts/HQClaimStatsChart';
+import SCAClaimsChart from '../components/charts/SCAClaimsChart';
 
 // ── Period filter ──────────────────────────────────────────
 type PeriodType = 'all' | 'monthly' | 'quarterly' | 'yearly';
@@ -137,6 +139,14 @@ export default function InsightsPage() {
     queryKey: ['analytics', 'financialSummary', dateRange],
     queryFn: () => api.getFinancialSummary(dateRange),
   });
+  const { data: hqClaimStats, isLoading: loadingHQ } = useQuery({
+    queryKey: ['analytics', 'hqClaimStats'],
+    queryFn: api.getHQClaimStats,
+  });
+  const { data: scaByMonth, isLoading: loadingSCA } = useQuery({
+    queryKey: ['analytics', 'scaByMonth'],
+    queryFn: api.getSCAClaimsByMonth,
+  });
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -182,6 +192,28 @@ export default function InsightsPage() {
           </span>
         </div>
         <ByAssigneeChart data={openByDealer || []} loading={loadingOpenByDealer} />
+      </div>
+
+      {/* HQ Claims Analysis */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+            HQ Claims Analysis
+          </h2>
+          <span className="text-[10px] text-text-muted">All-time · Based on HQ review records</span>
+        </div>
+        <HQClaimStatsChart data={hqClaimStats} loading={loadingHQ} />
+      </div>
+
+      {/* SCA Claims by Month */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+            SCA Claims by Month
+          </h2>
+          <span className="text-[10px] text-text-muted">Outside warranty parameters · Authorization field starts with "SCA-"</span>
+        </div>
+        <SCAClaimsChart data={scaByMonth} loading={loadingSCA} />
       </div>
     </div>
   );

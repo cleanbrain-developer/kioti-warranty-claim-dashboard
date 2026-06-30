@@ -2,10 +2,11 @@ import React from 'react';
 import { TrendingUp, CheckCircle, Clock } from 'lucide-react';
 import { SkeletonCard } from '../ui/Skeleton';
 
-function formatAmount(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${n.toFixed(0)}`;
+function formatAmount(n: number, currency = 'USD'): string {
+  const sym = currency === 'CAD' ? 'CA$' : '$';
+  if (n >= 1_000_000) return `${sym}${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${sym}${(n / 1_000).toFixed(1)}K`;
+  return `${sym}${n.toFixed(0)}`;
 }
 
 interface CurrencyRow { currency: string; total: number }
@@ -33,7 +34,7 @@ function CurrencyList({ rows, valueColor }: { rows: CurrencyRow[]; valueColor: s
             {r.currency}
           </span>
           <span className={`text-sm font-semibold tabular-nums ${valueColor}`}>
-            {formatAmount(r.total)}
+            {formatAmount(r.total, r.currency)}
           </span>
         </div>
       ))}
@@ -83,24 +84,29 @@ export default function FinancialSummaryCards({ data, loading }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      {cards.map(card => (
-        <div
-          key={card.label}
-          className={`card p-4 border ${card.border} hover:border-opacity-60 transition-colors`}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg} ${card.color} shrink-0`}>
-              {card.icon}
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {cards.map(card => (
+          <div
+            key={card.label}
+            className={`card p-4 border ${card.border} hover:border-opacity-60 transition-colors`}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${card.bg} ${card.color} shrink-0`}>
+                {card.icon}
+              </div>
+              <div className="min-w-0">
+                <div className="text-text-primary text-sm font-semibold truncate">{card.label}</div>
+                <div className="text-text-muted text-[10px] truncate">{card.sublabel}</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="text-text-primary text-sm font-semibold truncate">{card.label}</div>
-              <div className="text-text-muted text-[10px] truncate">{card.sublabel}</div>
-            </div>
+            <CurrencyList rows={card.rows} valueColor={card.color} />
           </div>
-          <CurrencyList rows={card.rows} valueColor={card.color} />
-        </div>
-      ))}
+        ))}
+      </div>
+      <p className="text-[10px] text-text-muted text-right">
+        Amounts shown in original currency (USD / CA$) — not converted
+      </p>
     </div>
   );
 }

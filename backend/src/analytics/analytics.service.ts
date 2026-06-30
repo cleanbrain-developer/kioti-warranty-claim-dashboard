@@ -254,6 +254,56 @@ export class AnalyticsService {
     return { hqClaimed, dealerPaid, dealerOutstanding };
   }
 
+  async getHQClaimStats() {
+    const [statusBreakdown, monthlyEval, adjudicationTrend] = await Promise.all([
+      this.prisma.$queryRaw<{ status: string; count: number }[]>`
+        SELECT COALESCE(status, 'Unknown') as status, COUNT(*)::int as count
+        FROM hq_claims
+        GROUP BY COALESCE(status, 'Unknown')
+        ORDER BY count DESC
+      `,
+      this.prisma.$queryRaw<{ month: string; count: number }[]>`
+        SELECT TO_CHAR(judged_date, 'YYYY-MM') as month, COUNT(*)::int as count
+        FROM hq_claims
+        WHERE judged_date IS NOT NULL
+        GROUP BY TO_CHAR(judged_date, 'YYYY-MM')
+        ORDER BY month ASC
+        LIMIT 12
+      `,
+      this.prisma.$queryRaw<{ month: string; avg_days: number; count: number }[]>`
+        SELECT
+          TO_CHAR(judged_date, 'YYYY-MM') as month,
+          ROUND(AVG(EXTRACT(EPOCH FROM (judged_date - sf_created_date)) / 86400)::numeric, 1)::float as avg_days,
+          COUNT(*)::int as count
+        FROM hq_claims
+        WHERE judged_date IS NOT NULL AND sf_created_date IS NOT NULL
+          AND judged_date > sf_created_date
+        GROUP BY TO_CHAR(judged_date, 'YYYY-MM')
+        ORDER BY month ASC
+        LIMIT 12
+      `,
+    ]);
+    return { statusBreakdown, monthlyEval, adjudicationTrend };
+  }
+
+  async getSCAClaimsByMonth() {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM') as month,
+        COUNT(*)::int as count,
+        COALESCE(SUM(total_amount), 0)::float as total_amount,
+        COUNT(DISTINCT dealer_name)::int as dealer_count
+      FROM warranty_claims
+      WHERE raw_data IS NOT NULL
+        AND raw_data::text LIKE '%"SCA-%'
+        AND COALESCE(submitted_date, created_at) IS NOT NULL
+      GROUP BY TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM')
+      ORDER BY month ASC
+      LIMIT 24
+    `;
+    return rows;
+  }
+
   async getAging() {
     const buckets = await this.prisma.$queryRaw<any[]>`
       WITH aged AS (
@@ -270,6 +320,7 @@ export class AnalyticsService {
           AND status NOT ILIKE '%closed%'
           AND status NOT ILIKE '%completed%'
           AND status NOT ILIKE '%cancel%'
+          AND status NOT ILIKE '%draft%'
       )
       SELECT
         COUNT(*) FILTER (WHERE age_days <= 30)::int as "0_30",
@@ -297,6 +348,7 @@ export class AnalyticsService {
           AND status NOT ILIKE '%closed%'
           AND status NOT ILIKE '%completed%'
           AND status NOT ILIKE '%cancel%'
+          AND status NOT ILIKE '%draft%'
       )
       SELECT
         dealer_name as dealer,
@@ -327,6 +379,7 @@ export class AnalyticsService {
           AND status NOT ILIKE '%closed%'
           AND status NOT ILIKE '%completed%'
           AND status NOT ILIKE '%cancel%'
+          AND status NOT ILIKE '%draft%'
       )
       SELECT
         model_name as model,
@@ -359,6 +412,7 @@ export class AnalyticsService {
         AND status NOT ILIKE '%completed%'
         AND status NOT ILIKE '%denied%'
         AND status NOT ILIKE '%cancel%'
+        AND status NOT ILIKE '%draft%'
         AND COALESCE(submitted_date, created_at) IS NOT NULL
       ORDER BY COALESCE(submitted_date, created_at) ASC
       LIMIT 10

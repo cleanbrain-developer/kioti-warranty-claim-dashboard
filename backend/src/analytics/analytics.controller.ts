@@ -63,4 +63,14 @@ export class AnalyticsController {
   getAging() {
     return this.analyticsService.getAging();
   }
+
+  @Get('hq-claim-stats')
+  getHQClaimStats() {
+    return this.analyticsService.getHQClaimStats();
+  }
+
+  @Get('sca-by-month')
+  getSCAClaimsByMonth() {
+    return this.analyticsService.getSCAClaimsByMonth();
+  }
 }
