@@ -197,7 +197,8 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     dateFrom.setDate(today.getDate() - maxDays);
 
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    navigate(`/claims?dealer=${encodeURIComponent(dealer)}&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}`);
+    const OPEN_STATUSES = 'In Review,Waiting on Dealer';
+    navigate(`/claims?dealer=${encodeURIComponent(dealer)}&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}&status=${encodeURIComponent(OPEN_STATUSES)}`);
   };
 
   return (
@@ -237,7 +238,7 @@ export default function AgingPage() {
       <div>
         <h1 className="text-text-primary font-semibold text-lg">Warranty Claim Aging Analysis</h1>
         <p className="text-text-muted text-sm mt-0.5">
-          Age measured from submission date · Open / pending claims only · Click any number to view cases
+          Age measured from submission date · In Review &amp; Waiting on Dealer only · Click any bar to view cases
         </p>
       </div>
 

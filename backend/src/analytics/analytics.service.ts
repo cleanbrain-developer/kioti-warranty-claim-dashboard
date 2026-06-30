@@ -314,13 +314,7 @@ export class AnalyticsService {
           status,
           id
         FROM warranty_claims
-        WHERE status NOT ILIKE '%approved%'
-          AND status NOT ILIKE '%paid%'
-          AND status NOT ILIKE '%rejected%'
-          AND status NOT ILIKE '%closed%'
-          AND status NOT ILIKE '%completed%'
-          AND status NOT ILIKE '%cancel%'
-          AND status NOT ILIKE '%draft%'
+        WHERE (status ILIKE '%in review%' OR status ILIKE '%waiting on dealer%')
       )
       SELECT
         COUNT(*) FILTER (WHERE age_days <= 30)::int as "0_30",
@@ -342,13 +336,7 @@ export class AnalyticsService {
           EXTRACT(EPOCH FROM (NOW() - COALESCE(submitted_date, created_at))) / 86400 AS age_days
         FROM warranty_claims
         WHERE dealer_name IS NOT NULL
-          AND status NOT ILIKE '%approved%'
-          AND status NOT ILIKE '%paid%'
-          AND status NOT ILIKE '%rejected%'
-          AND status NOT ILIKE '%closed%'
-          AND status NOT ILIKE '%completed%'
-          AND status NOT ILIKE '%cancel%'
-          AND status NOT ILIKE '%draft%'
+          AND (status ILIKE '%in review%' OR status ILIKE '%waiting on dealer%')
       )
       SELECT
         dealer_name as dealer,
@@ -373,13 +361,7 @@ export class AnalyticsService {
           EXTRACT(EPOCH FROM (NOW() - COALESCE(submitted_date, created_at))) / 86400 AS age_days
         FROM warranty_claims
         WHERE model_name IS NOT NULL
-          AND status NOT ILIKE '%approved%'
-          AND status NOT ILIKE '%paid%'
-          AND status NOT ILIKE '%rejected%'
-          AND status NOT ILIKE '%closed%'
-          AND status NOT ILIKE '%completed%'
-          AND status NOT ILIKE '%cancel%'
-          AND status NOT ILIKE '%draft%'
+          AND (status ILIKE '%in review%' OR status ILIKE '%waiting on dealer%')
       )
       SELECT
         model_name as model,
@@ -404,15 +386,7 @@ export class AnalyticsService {
              total_amount::float as "totalAmount",
              EXTRACT(EPOCH FROM (NOW() - COALESCE(submitted_date, created_at))) / 86400 AS "ageDays"
       FROM warranty_claims
-      WHERE status IS NOT NULL
-        AND status NOT ILIKE '%approved%'
-        AND status NOT ILIKE '%paid%'
-        AND status NOT ILIKE '%rejected%'
-        AND status NOT ILIKE '%closed%'
-        AND status NOT ILIKE '%completed%'
-        AND status NOT ILIKE '%denied%'
-        AND status NOT ILIKE '%cancel%'
-        AND status NOT ILIKE '%draft%'
+      WHERE (status ILIKE '%in review%' OR status ILIKE '%waiting on dealer%')
         AND COALESCE(submitted_date, created_at) IS NOT NULL
       ORDER BY COALESCE(submitted_date, created_at) ASC
       LIMIT 10
