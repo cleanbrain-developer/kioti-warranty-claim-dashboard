@@ -160,12 +160,12 @@ export default function InsightsPage() {
       {/* ── Period-scoped zone ───────────────────────────────────────────────
           KPICards / Financial Summary / Claims by Status all respond to the
           Period selector above — they are grouped here to make that clear.    */}
-      <section className="rounded-xl border border-accent-blue/25 p-4 space-y-4">
+      <section className="rounded-xl border-2 border-accent-blue/50 bg-accent-blue/[0.04] p-5 space-y-5 shadow-[0_0_0_4px_rgba(59,130,246,0.06)]">
         {/* Zone header */}
         <div className="flex items-center gap-2">
-          <CalendarDays size={12} className="text-accent-blue shrink-0" />
-          <span className="text-[10px] font-bold text-accent-blue uppercase tracking-widest">Period</span>
-          <div className="h-px flex-1 bg-accent-blue/20" />
+          <CalendarDays size={13} className="text-accent-blue shrink-0" />
+          <span className="text-[11px] font-bold text-accent-blue uppercase tracking-widest">Period</span>
+          <div className="h-[2px] flex-1 bg-accent-blue/30 rounded-full" />
         </div>
 
         {/* Period selector */}
