@@ -169,9 +169,16 @@ export class ClaimsService {
 
     const data = records.map(r => ({
       ...r,
-      totalAmount: r.totalAmount ? Number(r.totalAmount) : null,
+      // Derive totalAmount from labor+parts if the total field itself is null/zero
+      totalAmount: r.totalAmount
+        ? Number(r.totalAmount)
+        : (r.laborAmount != null || r.partsAmount != null)
+          ? Number(r.laborAmount ?? 0) + Number(r.partsAmount ?? 0)
+          : null,
       laborAmount: r.laborAmount ? Number(r.laborAmount) : null,
       partsAmount: r.partsAmount ? Number(r.partsAmount) : null,
+      // Fall back to SF record Owner name when the custom assignedTo field is unmapped
+      assignedTo: r.assignedTo || r.owner || null,
       sfLink: this.sfLink('Claim__c', r.sfId),
       hqClaims: r.hqClaims.map(h => ({
         ...h,

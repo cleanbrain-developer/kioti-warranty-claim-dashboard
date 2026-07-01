@@ -138,6 +138,7 @@ export default function ClaimsPage() {
       <ClaimsTable
         data={displayData}
         loading={isLoading}
+        isFetching={isFetching}
         isFetchingMore={isFetching && scrollMode === 'infinite'}
         sortBy={sortBy}
         sortDir={sortDir}

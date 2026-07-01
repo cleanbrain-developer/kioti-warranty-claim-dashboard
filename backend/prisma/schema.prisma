@@ -41,6 +41,17 @@ model WarrantyClaim {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([sfCreatedDate])
+  @@index([submittedDate])
+  @@index([approvedDate])
+  @@index([repairDate])
+  @@index([failureDate])
+  @@index([status])
+  @@index([dealerName])
+  @@index([assignedTo])
+  @@index([owner])
+  @@index([claimNumber])
+  @@index([totalAmount])
   @@map("warranty_claims")
 }
 
@@ -62,6 +73,7 @@ model HQClaim {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([claimId])
   @@map("hq_claims")
 }
 
@@ -86,6 +98,7 @@ model FinancialOrder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([claimId])
   @@map("financial_orders")
 }
 
@@ -107,6 +120,7 @@ model BillingDocument {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([financialOrderId])
   @@map("billing_documents")
 }
 

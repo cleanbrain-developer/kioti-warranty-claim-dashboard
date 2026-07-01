@@ -154,6 +154,11 @@
   }
 }
 
+@keyframes fetch-progress {
+  0%   { left: -45%; }
+  100% { left: 100%; }
+}
+
 /* ECharts tooltip */
 .echarts-tooltip-dark {
   background: var(--tooltip-bg) !important;
