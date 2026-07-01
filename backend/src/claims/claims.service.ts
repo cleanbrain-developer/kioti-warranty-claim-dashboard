@@ -18,6 +18,7 @@ export interface ClaimsQuery {
   hasBillingDocument?: string;
   openOnly?: string;
   scaOnly?: string;
+  agingOnly?: string;
   dateField?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
@@ -58,7 +59,23 @@ export class ClaimsService {
       ];
     }
 
-    if (q.status) {
+    // agingOnly: mirrors the aging query exactly — ILIKE status + COALESCE(submitted_date, created_at) date range.
+    // Sets where.id so it takes priority; status and date filters are skipped below.
+    let agingOnlyApplied = false;
+    if (q.agingOnly === 'true') {
+      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : new Date('1900-01-01');
+      const dateTo = q.dateTo ? new Date(`${q.dateTo}T23:59:59.999Z`) : new Date('2100-01-01');
+      const agingRows = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM warranty_claims
+        WHERE (status ILIKE '%in review%' OR status ILIKE '%waiting on dealer%')
+          AND COALESCE(submitted_date, created_at) >= ${dateFrom}
+          AND COALESCE(submitted_date, created_at) <= ${dateTo}
+      `;
+      where.id = { in: agingRows.map(r => r.id) };
+      agingOnlyApplied = true;
+    }
+
+    if (!agingOnlyApplied && q.status) {
       const statuses = q.status.split(',').map((s: string) => s.trim()).filter(Boolean);
       where.status = statuses.length === 1 ? statuses[0] : { in: statuses };
     }
@@ -117,7 +134,7 @@ export class ClaimsService {
     };
     const targetDateField = dateFieldMap[q.dateField] || 'submittedDate';
 
-    if (q.dateFrom || q.dateTo) {
+    if (!agingOnlyApplied && (q.dateFrom || q.dateTo)) {
       const dateCond: any = {};
       if (q.dateFrom) dateCond.gte = new Date(q.dateFrom);
       if (q.dateTo) dateCond.lte = new Date(q.dateTo);

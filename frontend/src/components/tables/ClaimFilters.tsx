@@ -18,6 +18,7 @@ interface FilterValues {
   hasFinancialOrder: string;
   hasBillingDocument: string;
   scaOnly: string;
+  agingOnly: string;
   limit: number;
 }
 
@@ -45,7 +46,7 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
     filters.search || filters.status || filters.dealer ||
     filters.assignee || filters.owner || filters.dateFrom || filters.dateTo ||
     filters.hasHQProduct || filters.hasFinancialOrder || filters.hasBillingDocument ||
-    filters.scaOnly
+    filters.scaOnly || filters.agingOnly
   );
 
   return (
@@ -68,6 +69,16 @@ export default function ClaimFilters({ filters, options, onChange, onClear, tota
               title="Remove SCA Claims filter"
             >
               SCA Claims Only
+              <X size={11} />
+            </button>
+          )}
+          {filters.agingOnly === 'true' && (
+            <button
+              onClick={e => { e.stopPropagation(); onChange({ agingOnly: '', dateFrom: '', dateTo: '' }); }}
+              className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium bg-accent-orange/15 text-accent-orange-light border border-accent-orange/30 hover:bg-accent-orange/25 transition-colors"
+              title="Remove Aging filter (In Review / Waiting on Dealer)"
+            >
+              Aging Filter
               <X size={11} />
             </button>
           )}

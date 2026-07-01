@@ -24,6 +24,7 @@ export class ClaimsController {
       hasBillingDocument: query.hasBillingDocument,
       openOnly: query.openOnly,
       scaOnly: query.scaOnly,
+      agingOnly: query.agingOnly,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
     });

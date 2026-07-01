@@ -27,17 +27,49 @@ function AgingKPICard({ label, value, sub, color }: { label: string; value: stri
 }
 
 function AgingBucketBar({ data }: { data: Record<string, number> }) {
+  const navigate = useNavigate();
   const total = BUCKET_KEYS.reduce((s, k) => s + (data[k] || 0), 0);
+
+  const handleBucketClick = (bucketIdx: number) => {
+    const count = data[BUCKET_KEYS[bucketIdx]] || 0;
+    if (!count) return;
+
+    const [minDays, maxDays] = BUCKET_DAYS[bucketIdx];
+    const today = new Date();
+
+    const dateTo = new Date(today);
+    dateTo.setDate(today.getDate() - minDays);
+
+    const dateFrom = new Date(today);
+    dateFrom.setDate(today.getDate() - maxDays);
+
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    navigate(`/claims?agingOnly=true&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}&sortBy=submittedDate&sortDir=asc`);
+  };
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {BUCKET_KEYS.map((k, i) => {
         const count = data[k] || 0;
         const pct = total ? Math.round((count / total) * 100) : 0;
+        const clickable = count > 0;
         return (
-          <div key={k} className="card p-4 text-center" style={{ borderTopColor: BUCKET_COLORS[i], borderTopWidth: 3 }}>
+          <div
+            key={k}
+            className={`card p-4 text-center transition-all duration-150 ${
+              clickable
+                ? 'cursor-pointer hover:ring-1 hover:ring-white/20 hover:scale-[1.02] hover:shadow-lg'
+                : ''
+            }`}
+            style={{ borderTopColor: BUCKET_COLORS[i], borderTopWidth: 3 }}
+            onClick={() => handleBucketClick(i)}
+            title={clickable ? `View ${count.toLocaleString()} ${BUCKET_LABELS[i]} open claims` : undefined}
+          >
             <div className="text-xs text-text-muted mb-1">{BUCKET_LABELS[i]}</div>
-            <div className="text-2xl font-bold" style={{ color: BUCKET_COLORS[i] }}>
+            <div
+              className={`text-2xl font-bold ${clickable ? 'underline-offset-2 hover:underline' : ''}`}
+              style={{ color: BUCKET_COLORS[i] }}
+            >
               {count.toLocaleString()}
             </div>
             <div className="text-xs text-text-muted mt-1">{pct}%</div>

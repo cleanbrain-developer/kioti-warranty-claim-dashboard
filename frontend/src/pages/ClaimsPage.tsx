@@ -32,6 +32,7 @@ export default function ClaimsPage() {
     hasFinancialOrder: getParam('hasFinancialOrder'),
     hasBillingDocument: getParam('hasBillingDocument'),
     scaOnly: getParam('scaOnly'),
+    agingOnly: getParam('agingOnly'),
     limit: parseInt(getParam('limit', '20')),
   };
 
