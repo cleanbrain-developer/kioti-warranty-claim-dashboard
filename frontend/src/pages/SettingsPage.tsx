@@ -43,7 +43,7 @@ export default function SettingsPage() {
   }, [settings]);
 
   const mutation = useMutation({
-    mutationFn: () => api.updateSettings(form),
+    mutationFn: (snapshot: typeof form) => api.updateSettings(snapshot),
     onSuccess: (data) => {
       if (data) qc.setQueryData(['sync', 'settings'], data);
     },
@@ -221,7 +221,7 @@ export default function SettingsPage() {
             )}
           </div>
           <button
-            onClick={() => mutation.mutate()}
+            onClick={() => mutation.mutate(form)}
             disabled={mutation.isPending}
             className="btn-primary text-xs px-5 py-2 disabled:opacity-50"
           >

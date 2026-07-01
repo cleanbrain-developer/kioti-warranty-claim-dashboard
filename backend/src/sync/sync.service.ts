@@ -70,11 +70,10 @@ export class SyncService implements OnModuleInit {
       this.logger.log('Starting scheduled sync');
       const mode = await this.settingsService.getScheduledSyncMode();
       await this.performSync('scheduled', mode === 'full');
-    });
+    }, null, true, 'UTC');
 
     this.schedulerRegistry.addCronJob('scheduled_sync', job);
-    job.start();
-    this.logger.log(`Scheduled sync cron: ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} daily`);
+    this.logger.log(`Scheduled sync cron: ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} UTC daily`);
   }
 
   async manualSync(password: string, force = false): Promise<{ success: boolean; message: string }> {
@@ -91,9 +90,19 @@ export class SyncService implements OnModuleInit {
 
   async getSettingsData() {
     const all = await this.settingsService.getAll();
-    const hour = parseInt(all.scheduledSyncHour || '1', 10);
-    const minute = parseInt(all.scheduledSyncMinute || '0', 10);
-    const nextRun = this.settingsService.getNextRun(hour, minute);
+
+    let nextRunDate: Date;
+    try {
+      const job = this.schedulerRegistry.getCronJob('scheduled_sync');
+      const luxonNext = (job as any).nextDate();
+      nextRunDate = luxonNext?.toJSDate ? luxonNext.toJSDate() : new Date(luxonNext);
+    } catch {
+      const hour = parseInt(all.scheduledSyncHour || '1', 10);
+      const minute = parseInt(all.scheduledSyncMinute || '0', 10);
+      nextRunDate = this.settingsService.getNextRun(hour, minute);
+    }
+
+    this.logger.log(`[Settings] nextRun=${nextRunDate.toISOString()} hour=${all.scheduledSyncHour}`);
 
     const lastScheduledSync = await this.prisma.syncLog.findFirst({
       where: { syncType: 'scheduled', status: 'success' },
@@ -102,7 +111,7 @@ export class SyncService implements OnModuleInit {
 
     return {
       ...all,
-      nextRun: nextRun.toISOString(),
+      nextRun: nextRunDate.toISOString(),
       lastScheduledSync: lastScheduledSync?.completedAt ?? null,
     };
   }

@@ -9,6 +9,7 @@ services:
     environment:
       DATABASE_URL: postgresql://kioti:${DB_PASSWORD:-kioti1234}@db:5432/kioti_warranty
       PORT: 3001
+      TZ: UTC
     depends_on:
       db:
         condition: service_healthy

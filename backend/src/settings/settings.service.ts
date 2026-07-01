@@ -53,8 +53,8 @@ export class SettingsService {
   getNextRun(hour: number, minute: number): Date {
     const now = new Date();
     const next = new Date();
-    next.setHours(hour, minute, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
+    next.setUTCHours(hour, minute, 0, 0);
+    if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
     return next;
   }
 }
