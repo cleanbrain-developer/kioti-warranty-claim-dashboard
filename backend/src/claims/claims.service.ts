@@ -112,6 +112,7 @@ export class ClaimsService {
     const dateFieldMap: Record<string, string> = {
       createdDate: 'sfCreatedDate',
       submittedDate: 'submittedDate',
+      failureDate: 'failureDate',
       repairDate: 'repairDate',
       approvedDate: 'approvedDate',
     };

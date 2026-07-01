@@ -159,13 +159,30 @@ export class SalesforceService {
       const repairDateMisMapped = this.FAILURE_DATE_CANDIDATES.some(
         c => c.toLowerCase() === (this.claimFieldMap.repairDate || '').toLowerCase(),
       );
-      const needsPatch = !this.claimFieldMap.dealerLookup || !this.claimFieldMap.totalAmount
-        || !this.claimFieldMap.failureDate || repairDateMisMapped
-        || !this.claimFieldMap.laborAmount || !this.claimFieldMap.partsAmount;
+      // Always run describe() after loading from DB to validate cached field names
+      // against the actual org — wrong guesses (e.g. TotalLaborAmount__c for an org
+      // that uses a different naming) are detected and reset here so re-discovery
+      // runs below. One SF API call per service startup; result is cached in memory.
+      const needsPatch = true;
       if (needsPatch) {
         try {
           const desc = await this.describe(this.claimObject);
           const fieldNames = desc.fields.map(f => f.name);
+
+          // Clear stale amount mappings: if cached field name doesn't exist in this org,
+          // reset it so re-discovery runs below
+          if (this.claimFieldMap.laborAmount && !fieldNames.includes(this.claimFieldMap.laborAmount)) {
+            this.logger.warn(`[FieldMap] laborAmount '${this.claimFieldMap.laborAmount}' not in org — resetting`);
+            this.claimFieldMap.laborAmount = undefined;
+          }
+          if (this.claimFieldMap.partsAmount && !fieldNames.includes(this.claimFieldMap.partsAmount)) {
+            this.logger.warn(`[FieldMap] partsAmount '${this.claimFieldMap.partsAmount}' not in org — resetting`);
+            this.claimFieldMap.partsAmount = undefined;
+          }
+          if (this.claimFieldMap.totalAmount && !fieldNames.includes(this.claimFieldMap.totalAmount)) {
+            this.logger.warn(`[FieldMap] totalAmount '${this.claimFieldMap.totalAmount}' not in org — resetting`);
+            this.claimFieldMap.totalAmount = undefined;
+          }
 
           // Discover failureDate if missing (field added after mapping was first cached)
           if (!this.claimFieldMap.failureDate) {
