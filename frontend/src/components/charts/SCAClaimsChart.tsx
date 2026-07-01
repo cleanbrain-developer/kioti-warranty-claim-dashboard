@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonChart } from '../ui/Skeleton';
@@ -31,7 +31,7 @@ export default function SCAClaimsChart({ data, loading }: Props) {
   const totalCount = data.reduce((s, r) => s + r.count, 0);
   const totalAmt = data.reduce((s, r) => s + (r.total_amount || 0), 0);
 
-  const option = {
+  const option = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -104,9 +104,9 @@ export default function SCAClaimsChart({ data, loading }: Props) {
         itemStyle: { color: '#ffa657' },
       },
     ],
-  };
+  }), [data, c]);
 
-  const handleClick = (params: any) => {
+  const handleClick = useCallback((params: any) => {
     const row = data[params.dataIndex];
     if (!row) return;
     const [y, m] = row.month.split('-').map(Number);
@@ -114,7 +114,7 @@ export default function SCAClaimsChart({ data, loading }: Props) {
     const dateFrom = `${row.month}-01`;
     const dateTo = `${row.month}-${String(lastDay).padStart(2, '0')}`;
     navigate(`/claims?scaOnly=true&dateField=approvedDate&dateFrom=${dateFrom}&dateTo=${dateTo}`);
-  };
+  }, [data, navigate]);
 
   return (
     <div>

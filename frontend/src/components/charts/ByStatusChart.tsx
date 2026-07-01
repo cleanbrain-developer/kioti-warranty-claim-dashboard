@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
@@ -23,7 +23,7 @@ export default function ByStatusChart({ data, loading }: Props) {
     );
   }
 
-  const option = {
+  const option = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
@@ -78,7 +78,7 @@ export default function ByStatusChart({ data, loading }: Props) {
         })),
       },
     ],
-  };
+  }), [data, c]);
 
   return (
     <ReactECharts

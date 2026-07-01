@@ -18,7 +18,9 @@ export default function Header() {
   const { data: syncStatus } = useQuery({
     queryKey: ['sync', 'status'],
     queryFn: api.getSyncStatus,
-    refetchInterval: 5000,
+    // Poll fast only during active sync; drop to 30s otherwise
+    refetchInterval: (query) =>
+      (query.state.data as any)?.isSyncing ? 1500 : 30_000,
   });
 
   // Auto-refresh all data when sync completes

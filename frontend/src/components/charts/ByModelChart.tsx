@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
@@ -18,6 +18,7 @@ export default function ByModelChart({ data, loading }: Props) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">No model data available</div>;
   }
 
+  const { sorted, option } = useMemo(() => {
   const sorted = [...data].sort((a, b) => b.count - a.count).slice(0, 12);
 
   const option = {
@@ -66,6 +67,9 @@ export default function ByModelChart({ data, loading }: Props) {
       },
     ],
   };
+
+  return { sorted, option };
+  }, [data, c]);
 
   return (
     <ReactECharts

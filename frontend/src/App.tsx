@@ -1,6 +1,6 @@
 import React, { useEffect, Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import Header from './components/layout/Header';
 import Navigation from './components/layout/Navigation';
 import InsightsPage from './pages/InsightsPage';
@@ -47,12 +47,6 @@ function AppInner() {
       .then(() => qc.invalidateQueries({ queryKey: ['visitors', 'today'] }))
       .catch(() => {});
   }, [qc]);
-
-  useQuery({
-    queryKey: ['visitors', 'today', browserTz],
-    queryFn: () => api.getTodayVisitors(browserTz),
-    refetchInterval: 60_000,
-  });
 
   return (
     <BrowserRouter>

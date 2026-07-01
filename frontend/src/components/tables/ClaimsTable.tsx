@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ArrowLeft, ArrowRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import Badge from '../ui/Badge';
 import { SkeletonTable } from '../ui/Skeleton';
@@ -50,9 +50,17 @@ export default function ClaimsTable({
   const { scrollMode } = useStore();
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // Disconnect on unmount to prevent firing callbacks on detached DOM nodes
+  useEffect(() => {
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
+
   const sentinelRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
     if (!node || scrollMode !== 'infinite' || !onLoadMore) return;
-    if (observerRef.current) observerRef.current.disconnect();
     observerRef.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingMore) onLoadMore();
     }, { rootMargin: '200px' });

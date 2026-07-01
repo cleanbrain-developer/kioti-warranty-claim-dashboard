@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
@@ -29,7 +29,7 @@ interface HQStats {
 interface Props { data: HQStats | undefined; loading: boolean; }
 
 function StatusDonut({ data, c }: { data: HQStats['statusBreakdown']; c: any }) {
-  const option = {
+  const option = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
@@ -70,7 +70,7 @@ function StatusDonut({ data, c }: { data: HQStats['statusBreakdown']; c: any }) 
       },
       data: data.map(d => ({ name: d.status, value: d.count, itemStyle: { color: statusColor(d.status) } })),
     }],
-  };
+  }), [data, c]);
 
   return <ReactECharts option={option} style={{ height: 240 }} opts={{ renderer: 'canvas' }} />;
 }

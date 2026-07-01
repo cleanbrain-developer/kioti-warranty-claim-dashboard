@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
@@ -87,6 +87,12 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   const [hoverBucket, setHoverBucket] = React.useState<number | null>(null);
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  React.useEffect(() => {
+    return () => {
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    };
+  }, []);
+
   if (!rows?.length) {
     return <div className="flex items-center justify-center h-48 text-text-muted text-sm">No data</div>;
   }
@@ -94,127 +100,128 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
   const top = rows.slice(0, 12);
   const rowTotals = top.map(r => BUCKET_KEYS.reduce((s, k) => s + (r[k] || 0), 0));
 
-  const getOpacity = (rowIdx: number, bucketIdx: number): number => {
-    if (hoverRow === null) return 1;
-    if (hoverRow === rowIdx) {
-      // same dealer: hovered bucket = full, other buckets = slightly dimmed
-      return (hoverBucket === null || hoverBucket === bucketIdx) ? 1 : 0.55;
-    }
-    return 0.30; // different dealer — visible but clearly background
-  };
-
-  const dataSeries = BUCKET_KEYS.map((k, i) => ({
-    name: BUCKET_LABELS[i],
-    type: 'bar',
-    stack: 'total',
-    data: top.map((r, rowIdx) => {
-      const val = r[k] || 0;
-      const opacity = getOpacity(rowIdx, i);
-      const isRightmost = val > 0 && BUCKET_KEYS.slice(i + 1).every(kk => !(r[kk] || 0));
-      const item: any = {
-        value: val,
-        itemStyle: { color: BUCKET_COLORS[i], opacity },
-      };
-      if (isRightmost) {
-        item.label = {
-          show: hoverRow === null || hoverRow === rowIdx,
-          position: 'right',
-          color: c.barLabelRight,
-          fontSize: 11,
-          fontWeight: '600',
-          formatter: () => String(rowTotals[rowIdx]),
-        };
+  const option = useMemo(() => {
+    const getOpacity = (rowIdx: number, bucketIdx: number): number => {
+      if (hoverRow === null) return 1;
+      if (hoverRow === rowIdx) {
+        return (hoverBucket === null || hoverBucket === bucketIdx) ? 1 : 0.55;
       }
-      return item;
-    }),
-    label: { show: false },
-    emphasis: {
-      itemStyle: {
-        shadowBlur: 16,
-        shadowColor: 'rgba(0,0,0,0.55)',
-        opacity: 1,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.7)',
-      },
-    },
-  }));
+      return 0.30;
+    };
 
-  const option = {
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: c.tooltipBg,
-      borderColor: c.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: c.tooltipText, fontSize: 12 },
-      formatter: (params: any) => {
-        if (!params.value) return '';
-        const rowIdx = params.dataIndex;
-        const bucketIdx = params.seriesIndex;
-        const name = top[rowIdx]?.[dimension] || 'Unknown';
-        const total = rowTotals[rowIdx];
-        const [minDays, maxDays] = BUCKET_DAYS[bucketIdx];
-        const rangeLabel = maxDays >= 3650 ? `${minDays}+ days` : `${minDays}–${maxDays} days`;
-        return `
-          <div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>
-          <div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
-            <span>${params.marker}${params.seriesName}</span><b>${params.value}</b>
-          </div>
-          <div style="margin-top:4px;padding-top:4px;border-top:1px solid ${c.tooltipBorder};
-               display:flex;justify-content:space-between;color:${c.axisMuted};font-size:11px">
-            <span>Total open</span><span>${total}</span>
-          </div>
-          <div style="margin-top:6px;color:${c.axisMuted};font-size:10px">
-            Click to view ${rangeLabel} claims for this dealer
-          </div>
-        `;
-      },
-    },
-    legend: {
-      data: BUCKET_LABELS,
-      textStyle: { color: c.legendText, fontSize: 10 },
-      itemWidth: 10,
-      itemHeight: 6,
-      bottom: 0,
-    },
-    grid: { left: '2%', right: '52px', top: '4%', bottom: '60px', containLabel: true },
-    xAxis: {
-      type: 'value',
-      axisLine: { show: false },
-      axisTick: { show: false },
-      splitLine: { lineStyle: { color: c.gridLine, type: 'dashed' } },
-      axisLabel: { color: c.axisMuted, fontSize: 11 },
-    },
-    yAxis: {
-      type: 'category',
-      data: top.map(r => {
-        const name = r[dimension] || 'Unknown';
-        return name.length > 22 ? name.slice(0, 22) + '…' : name;
+    const dataSeries = BUCKET_KEYS.map((k, i) => ({
+      name: BUCKET_LABELS[i],
+      type: 'bar',
+      stack: 'total',
+      data: top.map((r, rowIdx) => {
+        const val = r[k] || 0;
+        const opacity = getOpacity(rowIdx, i);
+        const isRightmost = val > 0 && BUCKET_KEYS.slice(i + 1).every(kk => !(r[kk] || 0));
+        const item: any = {
+          value: val,
+          itemStyle: { color: BUCKET_COLORS[i], opacity },
+        };
+        if (isRightmost) {
+          item.label = {
+            show: hoverRow === null || hoverRow === rowIdx,
+            position: 'right',
+            color: c.barLabelRight,
+            fontSize: 11,
+            fontWeight: '600',
+            formatter: () => String(rowTotals[rowIdx]),
+          };
+        }
+        return item;
       }),
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { color: c.axisLabel, fontSize: 11 },
-      inverse: true,
-    },
-    series: dataSeries,
-  };
+      label: { show: false },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 16,
+          shadowColor: 'rgba(0,0,0,0.55)',
+          opacity: 1,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.7)',
+        },
+      },
+    }));
 
-  const handleOver = (params: any) => {
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: c.tooltipBg,
+        borderColor: c.tooltipBorder,
+        borderWidth: 1,
+        textStyle: { color: c.tooltipText, fontSize: 12 },
+        formatter: (params: any) => {
+          if (!params.value) return '';
+          const rowIdx = params.dataIndex;
+          const bucketIdx = params.seriesIndex;
+          const name = top[rowIdx]?.[dimension] || 'Unknown';
+          const total = rowTotals[rowIdx];
+          const [minDays, maxDays] = BUCKET_DAYS[bucketIdx];
+          const rangeLabel = maxDays >= 3650 ? `${minDays}+ days` : `${minDays}–${maxDays} days`;
+          return `
+            <div style="font-weight:700;margin-bottom:6px;font-size:13px">${name}</div>
+            <div style="display:flex;justify-content:space-between;gap:20px;line-height:1.8">
+              <span>${params.marker}${params.seriesName}</span><b>${params.value}</b>
+            </div>
+            <div style="margin-top:4px;padding-top:4px;border-top:1px solid ${c.tooltipBorder};
+                 display:flex;justify-content:space-between;color:${c.axisMuted};font-size:11px">
+              <span>Total open</span><span>${total}</span>
+            </div>
+            <div style="margin-top:6px;color:${c.axisMuted};font-size:10px">
+              Click to view ${rangeLabel} claims for this dealer
+            </div>
+          `;
+        },
+      },
+      legend: {
+        data: BUCKET_LABELS,
+        textStyle: { color: c.legendText, fontSize: 10 },
+        itemWidth: 10,
+        itemHeight: 6,
+        bottom: 0,
+      },
+      grid: { left: '2%', right: '52px', top: '4%', bottom: '60px', containLabel: true },
+      xAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: c.gridLine, type: 'dashed' } },
+        axisLabel: { color: c.axisMuted, fontSize: 11 },
+      },
+      yAxis: {
+        type: 'category',
+        data: top.map(r => {
+          const name = r[dimension] || 'Unknown';
+          return name.length > 22 ? name.slice(0, 22) + '…' : name;
+        }),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: c.axisLabel, fontSize: 11 },
+        inverse: true,
+      },
+      series: dataSeries,
+    };
+  }, [top, rowTotals, dimension, hoverRow, hoverBucket, c]);
+
+  const handleOver = useCallback((params: any) => {
     if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
     if (params.componentType === 'series') {
       setHoverRow(params.dataIndex);
       setHoverBucket(params.seriesIndex);
     }
-  };
+  }, []);
 
-  const handleOut = () => {
+  const handleOut = useCallback(() => {
     leaveTimer.current = setTimeout(() => {
       setHoverRow(null);
       setHoverBucket(null);
     }, 80);
-  };
+  }, []);
 
-  const handleClick = (params: any) => {
+  const handleClick = useCallback((params: any) => {
     if (params.componentType !== 'series' || !params.value) return;
     const dealer = top[params.dataIndex]?.[dimension];
     if (!dealer || dealer === 'Unknown') return;
@@ -232,7 +239,7 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const OPEN_STATUSES = 'In Review,Waiting on Dealer';
     navigate(`/claims?dealer=${encodeURIComponent(dealer)}&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}&status=${encodeURIComponent(OPEN_STATUSES)}`);
-  };
+  }, [top, dimension, navigate]);
 
   return (
     <ReactECharts

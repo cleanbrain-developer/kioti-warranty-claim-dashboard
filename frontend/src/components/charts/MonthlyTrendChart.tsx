@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { format, parseISO } from 'date-fns';
@@ -17,11 +17,12 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">No trend data available</div>;
   }
 
+  const option = useMemo(() => {
   const months = data.map(d => {
     try { return format(parseISO(`${d.month}-01`), 'MMM yy'); } catch { return d.month; }
   });
 
-  const option = {
+  return {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
@@ -89,6 +90,7 @@ export default function MonthlyTrendChart({ data, loading }: Props) {
       },
     ],
   };
+  }, [data, c]);
 
   return (
     <ReactECharts

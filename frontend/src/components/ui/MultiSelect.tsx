@@ -27,7 +27,9 @@ export default function MultiSelect({ values, onChange, options, placeholder, cl
   }, []);
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 0);
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
   }, [open]);
 
   const filtered = search

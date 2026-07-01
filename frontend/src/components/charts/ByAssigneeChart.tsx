@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonChart } from '../ui/Skeleton';
@@ -36,10 +36,10 @@ export default function ByAssigneeChart({ data, loading }: Props) {
     );
   }
 
+  const { sorted, names, openValues, chartHeight, option } = useMemo(() => {
   const sorted = [...data].sort((a, b) => a.open - b.open).slice(0, 20);
   const names = sorted.map(d => d.dealer);
   const openValues = sorted.map(d => d.open);
-
   const chartHeight = Math.max(320, 60 + sorted.length * 36);
 
   const option = {
@@ -102,12 +102,15 @@ export default function ByAssigneeChart({ data, loading }: Props) {
     ],
   };
 
-  const handleClick = (params: any) => {
+  return { sorted, names, openValues, chartHeight, option };
+  }, [data, c]);
+
+  const handleClick = useCallback((params: any) => {
     const dealer = names[params.dataIndex];
     if (dealer && dealer !== 'Unknown') {
       navigate(`/claims?dealer=${encodeURIComponent(dealer)}&status=${encodeURIComponent(OPEN_STATUSES)}`);
     }
-  };
+  }, [names, navigate]);
 
   return (
     <div>

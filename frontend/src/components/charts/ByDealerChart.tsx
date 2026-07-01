@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { SkeletonChart } from '../ui/Skeleton';
 import { useChartColors } from '../../hooks/useChartColors';
@@ -17,6 +17,7 @@ export default function ByDealerChart({ data, loading }: Props) {
     return <div className="flex items-center justify-center h-64 text-text-muted text-sm">No dealer data available</div>;
   }
 
+  const { sorted, option } = useMemo(() => {
   const sorted = [...data].sort((a, b) => a.count - b.count).slice(-15);
 
   const option = {
@@ -74,6 +75,9 @@ export default function ByDealerChart({ data, loading }: Props) {
       },
     ],
   };
+
+  return { sorted, option };
+  }, [data, c]);
 
   return (
     <ReactECharts

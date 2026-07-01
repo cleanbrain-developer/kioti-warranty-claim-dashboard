@@ -8,8 +8,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,   // keep inactive queries in cache 10 min then GC
       retry: 2,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false, // don't re-fetch all queries on network reconnect
     },
   },
 });
