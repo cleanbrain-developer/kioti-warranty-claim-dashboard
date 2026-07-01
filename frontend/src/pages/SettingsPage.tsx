@@ -44,7 +44,9 @@ export default function SettingsPage() {
 
   const mutation = useMutation({
     mutationFn: () => api.updateSettings(form),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync', 'settings'] }),
+    onSuccess: (data) => {
+      if (data) qc.setQueryData(['sync', 'settings'], data);
+    },
   });
 
   const nextRun = settings?.nextRun ? new Date(settings.nextRun) : null;
