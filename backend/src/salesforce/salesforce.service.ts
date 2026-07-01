@@ -108,8 +108,33 @@ export class SalesforceService {
 
   async describe(objectName: string): Promise<{ fields: SFDescribeField[] }> {
     await this.authenticate();
-    const res = await this.http.get(`/sobjects/${objectName}/describe`);
-    return res.data;
+    return this.sfGet<{ fields: SFDescribeField[] }>(`/sobjects/${objectName}/describe`);
+  }
+
+  private async sfGet<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
+    const MAX_RETRIES = 3;
+    let lastErr: any;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const res = await this.http.get<T>(url, { headers });
+        return res.data;
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 503 || status === 429 || status === 500) {
+          lastErr = err;
+          const delay = (attempt + 1) * 5_000;
+          this.logger.warn(`[SF] HTTP ${status} on ${url.slice(0, 60)}, retrying in ${delay / 1000}s (${attempt + 1}/${MAX_RETRIES})`);
+          await new Promise(r => setTimeout(r, delay));
+          if (status === 503 || status === 401) {
+            // Force token refresh on next authenticate() call
+            this.tokenExpiry = null;
+          }
+        } else {
+          throw err;
+        }
+      }
+    }
+    throw lastErr;
   }
 
   async query<T = any>(soql: string): Promise<T[]> {
@@ -119,13 +144,14 @@ export class SalesforceService {
     let first = true;
 
     while (url) {
-      const res = await this.http.get<SFQueryResult<T>>(url, {
-        headers: first ? { 'Sforce-Query-Options': 'batchSize=2000' } : {},
-      });
+      const data = await this.sfGet<SFQueryResult<T>>(
+        url,
+        first ? { 'Sforce-Query-Options': 'batchSize=2000' } : {},
+      );
       first = false;
-      results.push(...res.data.records);
-      url = res.data.nextRecordsUrl
-        ? res.data.nextRecordsUrl.replace(/.*\/services\/data\/[^/]+/, '')
+      results.push(...data.records);
+      url = data.nextRecordsUrl
+        ? data.nextRecordsUrl.replace(/.*\/services\/data\/[^/]+/, '')
         : null;
     }
 

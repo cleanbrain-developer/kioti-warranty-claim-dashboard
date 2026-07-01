@@ -318,7 +318,7 @@ export class AnalyticsService {
               SELECT COALESCE(SUM(
                 CASE WHEN j.v ~ '^[0-9]+(\.[0-9]+)?$' THEN j.v::numeric ELSE 0 END
               ), 0)
-              FROM json_each_text(wc.raw_data) AS j(k, v)
+              FROM jsonb_each_text(wc.raw_data) AS j(k, v)
               WHERE (
                 (j.k ILIKE '%labor%' AND j.k NOT ILIKE '%description%' AND j.k NOT ILIKE '%type%' AND j.k NOT ILIKE '%date%' AND j.k NOT ILIKE '%number%')
                 OR
@@ -393,7 +393,7 @@ export class AnalyticsService {
           parts_amount,
           (
             SELECT json_agg(json_build_object('key', j.k, 'value', j.v) ORDER BY j.k)
-            FROM json_each_text(raw_data) AS j(k, v)
+            FROM jsonb_each_text(raw_data) AS j(k, v)
             WHERE (j.k ILIKE '%amount%' OR j.k ILIKE '%labor%' OR j.k ILIKE '%part%' OR j.k ILIKE '%cost%' OR j.k ILIKE '%price%' OR j.k ILIKE '%total%')
               AND j.v IS NOT NULL AND j.v != '' AND j.v != 'null'
           ) as amount_like_fields
@@ -410,7 +410,7 @@ export class AnalyticsService {
         SELECT
           (
             SELECT json_agg(DISTINCT j.k ORDER BY j.k)
-            FROM warranty_claims wc2, json_each_text(wc2.raw_data) AS j(k, v)
+            FROM warranty_claims wc2, jsonb_each_text(wc2.raw_data) AS j(k, v)
             WHERE (j.k ILIKE '%amount%' OR j.k ILIKE '%labor%' OR j.k ILIKE '%part%' OR j.k ILIKE '%cost%')
               AND j.v IS NOT NULL AND j.v != '' AND j.v != 'null' AND j.v != '0'
           ) as all_amount_field_names
