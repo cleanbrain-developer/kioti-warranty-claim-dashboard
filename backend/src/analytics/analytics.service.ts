@@ -298,9 +298,18 @@ export class AnalyticsService {
     //      'labor' or 'part' (with common false-positive exclusions) — works regardless
     //      of KIOTI-specific SF field naming
     //   3. total_amount DB column
+    // SCA detection: claim_number (= SF Name field) may itself start with "SCA-"
+    // when KIOTI's org auto-numbers SCA authorizations. raw_data fallback covers
+    // orgs where the auth number is stored in a custom field like Authorization_Number__c.
+    //
+    // Date grouping: prefer approved_date; fall back to submitted_date then created_at
+    // so that in-review / waiting-on-dealer claims without an approved date still appear.
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT
-        TO_CHAR(wc.approved_date, 'YYYY-MM') as month,
+        TO_CHAR(
+          COALESCE(wc.approved_date, wc.submitted_date, DATE(wc.created_at AT TIME ZONE 'UTC')),
+          'YYYY-MM'
+        ) as month,
         COUNT(*)::int as count,
         COALESCE(SUM(
           COALESCE(
@@ -325,23 +334,25 @@ export class AnalyticsService {
         ), 0)::float as total_amount,
         COUNT(DISTINCT wc.dealer_name)::int as dealer_count
       FROM warranty_claims wc
-      WHERE wc.raw_data IS NOT NULL
-        AND (
-          (wc.raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
-          OR (wc.raw_data->>'Authorization_Number__c') LIKE 'sca-%'
-          OR wc.raw_data::text LIKE '%"SCA-%'
-        )
-        AND (
-          (wc.raw_data->>'Authorization_Number__c') IS NULL
-          OR (wc.raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
-        )
-        AND (
-          wc.status ILIKE '%in review%'
-          OR wc.status ILIKE '%waiting on dealer%'
-          OR wc.status ILIKE '%approved%'
-        )
-        AND wc.approved_date IS NOT NULL
-      GROUP BY TO_CHAR(wc.approved_date, 'YYYY-MM')
+      WHERE (
+        -- Detection via claim_number (SF Name field — KIOTI's SCA auto-number format)
+        wc.claim_number ILIKE 'SCA-%'
+        -- Detection via raw_data custom field (Authorization_Number__c or any field with SCA- value)
+        OR (wc.raw_data IS NOT NULL AND (
+          (wc.raw_data->>'Authorization_Number__c') ILIKE 'SCA-%'
+          OR wc.raw_data::text ILIKE '%"SCA-%'
+        ))
+      )
+      AND wc.claim_number NOT ILIKE '%HCR%'
+      AND (
+        wc.status ILIKE '%in review%'
+        OR wc.status ILIKE '%waiting on dealer%'
+        OR wc.status ILIKE '%approved%'
+      )
+      GROUP BY TO_CHAR(
+        COALESCE(wc.approved_date, wc.submitted_date, DATE(wc.created_at AT TIME ZONE 'UTC')),
+        'YYYY-MM'
+      )
       ORDER BY month ASC
       LIMIT 24
     `;
@@ -359,16 +370,24 @@ export class AnalyticsService {
         SELECT
           COUNT(*)::int as total_claims,
           COUNT(*) FILTER (WHERE raw_data IS NOT NULL)::int as has_raw_data,
+          COUNT(*) FILTER (WHERE approved_date IS NOT NULL)::int as approved_date_has_value,
+          COUNT(*) FILTER (WHERE submitted_date IS NOT NULL)::int as submitted_date_has_value,
           COUNT(*) FILTER (WHERE total_amount IS NOT NULL AND total_amount > 0)::int as total_amount_has_value,
           COUNT(*) FILTER (WHERE labor_amount IS NOT NULL AND labor_amount > 0)::int as labor_amount_has_value,
-          COUNT(*) FILTER (WHERE parts_amount IS NOT NULL AND parts_amount > 0)::int as parts_amount_has_value
+          COUNT(*) FILTER (WHERE parts_amount IS NOT NULL AND parts_amount > 0)::int as parts_amount_has_value,
+          COUNT(*) FILTER (WHERE claim_number ILIKE 'SCA-%')::int as claim_number_starts_sca,
+          COUNT(*) FILTER (WHERE raw_data IS NOT NULL AND raw_data::text ILIKE '%"SCA-%')::int as raw_data_contains_sca
         FROM warranty_claims
       `,
-      // Sample SCA claims — show all raw_data fields that look like amounts
+      // Sample SCA claims by claim_number OR raw_data
       this.prisma.$queryRaw<any[]>`
         SELECT
           id,
-          raw_data->>'Authorization_Number__c' as auth_number,
+          claim_number,
+          status,
+          approved_date,
+          submitted_date,
+          raw_data->>'Authorization_Number__c' as auth_number_field,
           total_amount,
           labor_amount,
           parts_amount,
@@ -379,14 +398,14 @@ export class AnalyticsService {
               AND j.v IS NOT NULL AND j.v != '' AND j.v != 'null'
           ) as amount_like_fields
         FROM warranty_claims
-        WHERE raw_data IS NOT NULL
-          AND (
-            (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
-            OR raw_data::text LIKE '%"SCA-%'
-          )
+        WHERE claim_number ILIKE 'SCA-%'
+           OR (raw_data IS NOT NULL AND (
+             (raw_data->>'Authorization_Number__c') ILIKE 'SCA-%'
+             OR raw_data::text ILIKE '%"SCA-%'
+           ))
         LIMIT 3
       `,
-      // Also sample non-SCA claims to see overall field names
+      // Distinct amount-related field names across all raw_data JSONs
       this.prisma.$queryRaw<any[]>`
         SELECT
           (
@@ -403,7 +422,11 @@ export class AnalyticsService {
       columnStats: columnStats[0],
       sampleSCAClaims: sampleSCAClaims.map(r => ({
         id: r.id,
-        authNumber: r.auth_number,
+        claimNumber: r.claim_number,
+        status: r.status,
+        approvedDate: r.approved_date,
+        submittedDate: r.submitted_date,
+        authNumberField: r.auth_number_field,
         dbTotalAmount: r.total_amount ? Number(r.total_amount) : null,
         dbLaborAmount: r.labor_amount ? Number(r.labor_amount) : null,
         dbPartsAmount: r.parts_amount ? Number(r.parts_amount) : null,

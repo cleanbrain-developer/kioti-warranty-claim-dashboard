@@ -182,7 +182,8 @@ export default function ClaimsTable({
                     <td className="px-4 py-3 text-right tabular-nums">
                       {row.totalAmount != null ? (
                         <span className="text-text-primary font-medium">
-                          ${Number(row.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          {row.currencyIsoCode === 'CAD' ? 'CA$' : '$'}
+                          {Number(row.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </span>
                       ) : (
                         <span className="text-text-muted">—</span>

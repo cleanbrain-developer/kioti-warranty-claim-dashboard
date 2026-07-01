@@ -88,21 +88,20 @@ export class ClaimsService {
       ];
     }
 
-    // SCA claims: authorization number starts with "SCA-" — uses the exact same detection
-    // SQL as getSCAClaimsByMonth in analytics.service.ts so chart counts and list counts match
+    // SCA detection: mirrors getSCAClaimsByMonth() so chart bar click-through shows
+    // the same records as the chart counted. claim_number (SF Name) may itself be the
+    // authorization number when KIOTI auto-numbers SCA claims.
     if (q.scaOnly === 'true') {
       const scaRows = await this.prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM warranty_claims
-        WHERE raw_data IS NOT NULL
-          AND (
-            (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
-            OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
-            OR raw_data::text LIKE '%"SCA-%'
-          )
-          AND (
-            (raw_data->>'Authorization_Number__c') IS NULL
-            OR (raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
-          )
+        WHERE (
+          claim_number ILIKE 'SCA-%'
+          OR (raw_data IS NOT NULL AND (
+            (raw_data->>'Authorization_Number__c') ILIKE 'SCA-%'
+            OR raw_data::text ILIKE '%"SCA-%'
+          ))
+        )
+        AND claim_number NOT ILIKE '%HCR%'
       `;
       where.id = { in: scaRows.map(r => r.id) };
     }
