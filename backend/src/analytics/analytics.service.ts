@@ -295,7 +295,18 @@ export class AnalyticsService {
       SELECT
         TO_CHAR(approved_date, 'YYYY-MM') as month,
         COUNT(*)::int as count,
-        COALESCE(SUM(COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0)), 0)::float as total_amount,
+        COALESCE(SUM(
+          COALESCE(
+            NULLIF(COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0), 0),
+            NULLIF(
+              COALESCE((NULLIF(raw_data->>'TotalLaborAmount__c',''))::numeric, 0) +
+              COALESCE((NULLIF(raw_data->>'TotalPartAmount__c',''))::numeric, 0),
+              0
+            ),
+            NULLIF(total_amount, 0),
+            0
+          )
+        ), 0)::float as total_amount,
         COUNT(DISTINCT dealer_name)::int as dealer_count
       FROM warranty_claims
       WHERE raw_data IS NOT NULL

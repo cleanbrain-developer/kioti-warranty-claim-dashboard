@@ -160,7 +160,8 @@ export class SalesforceService {
         c => c.toLowerCase() === (this.claimFieldMap.repairDate || '').toLowerCase(),
       );
       const needsPatch = !this.claimFieldMap.dealerLookup || !this.claimFieldMap.totalAmount
-        || !this.claimFieldMap.failureDate || repairDateMisMapped;
+        || !this.claimFieldMap.failureDate || repairDateMisMapped
+        || !this.claimFieldMap.laborAmount || !this.claimFieldMap.partsAmount;
       if (needsPatch) {
         try {
           const desc = await this.describe(this.claimObject);
@@ -211,6 +212,37 @@ export class SalesforceService {
             }
           }
 
+          // Patch laborAmount / partsAmount if missing (SF report uses TotalLaborAmount__c / TotalPartAmount__c)
+          if (!this.claimFieldMap.laborAmount) {
+            const LABOR_CANDIDATES = ['TotalLaborAmount__c', 'LaborAmount__c', 'LaborCost__c', 'TotalLabor__c', 'Labor_Amount__c'];
+            const found = this.findField(fieldNames, LABOR_CANDIDATES)
+              || desc.fields.find(ff => ff.type === 'currency' && ff.name.toLowerCase().includes('labor'))?.name;
+            if (found) {
+              this.claimFieldMap.laborAmount = found;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'laborAmount' } },
+                update: { fieldName: found },
+                create: { objectName: this.claimObject, fieldKey: 'laborAmount', fieldName: found },
+              });
+              this.logger.log(`[FieldMap] laborAmount patched: ${found}`);
+            }
+          }
+
+          if (!this.claimFieldMap.partsAmount) {
+            const PARTS_CANDIDATES = ['TotalPartAmount__c', 'TotalPartsAmount__c', 'PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c', 'Part_Amount__c'];
+            const found = this.findField(fieldNames, PARTS_CANDIDATES)
+              || desc.fields.find(ff => ff.type === 'currency' && (ff.name.toLowerCase().includes('part') || ff.name.toLowerCase().includes('material')))?.name;
+            if (found) {
+              this.claimFieldMap.partsAmount = found;
+              await this.prisma.fieldMapping.upsert({
+                where: { objectName_fieldKey: { objectName: this.claimObject, fieldKey: 'partsAmount' } },
+                update: { fieldName: found },
+                create: { objectName: this.claimObject, fieldKey: 'partsAmount', fieldName: found },
+              });
+              this.logger.log(`[FieldMap] partsAmount patched: ${found}`);
+            }
+          }
+
           // Patch totalAmount if missing — use heuristic scoring across all currency fields
           if (!this.claimFieldMap.totalAmount) {
             const currencyFields = desc.fields.filter(f => f.type === 'currency');
@@ -250,8 +282,8 @@ export class SalesforceService {
         approvedDate: ['ApprovedDate__c', 'ApprovalDate__c', 'ApprovedOn__c'],
         rejectedDate: ['RejectedDate__c', 'DeniedDate__c'],
         totalAmount: ['TotalAmount__c', 'ClaimAmount__c', 'TotalClaimAmount__c', 'Amount__c'],
-        laborAmount: ['LaborAmount__c', 'LaborCost__c', 'TotalLabor__c'],
-        partsAmount: ['PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c'],
+        laborAmount: ['TotalLaborAmount__c', 'LaborAmount__c', 'LaborCost__c', 'TotalLabor__c', 'Labor_Amount__c'],
+        partsAmount: ['TotalPartAmount__c', 'TotalPartsAmount__c', 'PartsAmount__c', 'PartAmount__c', 'PartsCost__c', 'TotalParts__c', 'Part_Amount__c'],
         hasHQProduct: ['HasHQProduct__c', 'HQProductIncluded__c', 'IsHQProduct__c', 'ContainsHQParts__c'],
         assignedTo: ['PersonInCharge__c', 'AssignedTo__c', 'AssignedUser__c', 'HandlerName__c', 'ClaimHandler__c'],
         assetLookup: ['AssetId', 'Asset__c', 'AssetLookup__c'],
