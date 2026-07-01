@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Users, Sun, Moon, Database } from 'lucide-react';
+import { RefreshCw, Users, Sun, Moon, Database, ShieldAlert } from 'lucide-react';
 import { api } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import SyncModal from '../ui/SyncModal';
@@ -49,6 +49,14 @@ export default function Header() {
   return (
     <>
       <header className="bg-bg-card border-b border-border sticky top-0 z-50">
+        {/* Confidentiality notice */}
+        <div className="bg-amber-950/60 border-b border-amber-800/40 px-4 py-1 flex items-center justify-center gap-1.5">
+          <ShieldAlert size={11} className="text-amber-400 shrink-0" />
+          <span className="text-[11px] text-amber-300/90 tracking-wide">
+            For internal employees only — this dashboard contains confidential information.
+          </span>
+        </div>
+
         <div className="max-w-screen-2xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo + Title */}
           <div className="flex items-center gap-3 shrink-0">
