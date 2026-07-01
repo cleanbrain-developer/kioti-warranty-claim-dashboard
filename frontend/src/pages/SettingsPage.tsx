@@ -5,6 +5,11 @@ import { Settings, Zap, RefreshCw, Clock, CheckCircle, AlertTriangle, CalendarCl
 
 const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+const tzAbbr =
+  Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+    .formatToParts(new Date())
+    .find(p => p.type === 'timeZoneName')?.value ?? browserTz;
+
 function formatLocalDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
@@ -12,6 +17,21 @@ function formatLocalDate(date: Date): string {
     timeZone: browserTz,
   }).format(date);
 }
+
+/** Convert a UTC hour/minute stored on the server to the browser's local hour/minute. */
+function utcToLocalHM(utcHour: number, utcMinute: number): { hour: number; minute: number } {
+  const d = new Date();
+  d.setUTCHours(utcHour, utcMinute, 0, 0);
+  return { hour: d.getHours(), minute: d.getMinutes() };
+}
+
+/** Convert the browser's local hour/minute to UTC for sending to the server. */
+function localToUtcHM(localHour: number, localMinute: number): { hour: number; minute: number } {
+  const d = new Date();
+  d.setHours(localHour, localMinute, 0, 0);
+  return { hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+}
+
 import { api } from '../api/client';
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
@@ -34,16 +54,28 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings) {
+      const utcHour = parseInt(settings.scheduledSyncHour ?? '1', 10);
+      const utcMinute = parseInt(settings.scheduledSyncMinute ?? '0', 10);
+      const local = utcToLocalHM(utcHour, utcMinute);
       setForm({
         scheduledSyncMode: settings.scheduledSyncMode ?? 'incremental',
-        scheduledSyncHour: settings.scheduledSyncHour ?? '1',
-        scheduledSyncMinute: settings.scheduledSyncMinute ?? '0',
+        scheduledSyncHour: String(local.hour),
+        scheduledSyncMinute: String(local.minute),
       });
     }
   }, [settings]);
 
   const mutation = useMutation({
-    mutationFn: (snapshot: typeof form) => api.updateSettings(snapshot),
+    mutationFn: (snapshot: typeof form) => {
+      const localHour = parseInt(snapshot.scheduledSyncHour, 10);
+      const localMinute = parseInt(snapshot.scheduledSyncMinute, 10);
+      const utc = localToUtcHM(localHour, localMinute);
+      return api.updateSettings({
+        ...snapshot,
+        scheduledSyncHour: String(utc.hour),
+        scheduledSyncMinute: String(utc.minute),
+      });
+    },
     onSuccess: (data) => {
       if (data) qc.setQueryData(['sync', 'settings'], data);
     },
@@ -55,6 +87,8 @@ export default function SettingsPage() {
   const previewHour = parseInt(form.scheduledSyncHour, 10);
   const previewMinute = parseInt(form.scheduledSyncMinute, 10);
   const previewTime = `${String(previewHour).padStart(2, '0')}:${String(previewMinute).padStart(2, '0')}`;
+  const utcEquivalent = localToUtcHM(previewHour, previewMinute);
+  const utcPreviewTime = `${String(utcEquivalent.hour).padStart(2, '0')}:${String(utcEquivalent.minute).padStart(2, '0')}`;
 
   if (isLoading) {
     return (
@@ -169,9 +203,9 @@ export default function SettingsPage() {
           <label className="text-xs font-semibold text-text-secondary uppercase tracking-wide block mb-2">
             Daily Execution Time
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-text-muted">Hour (0–23)</span>
+              <span className="text-[11px] text-text-muted">Hour (0–23, {tzAbbr})</span>
               <select
                 value={form.scheduledSyncHour}
                 onChange={e => setForm(f => ({ ...f, scheduledSyncHour: e.target.value }))}
@@ -195,10 +229,18 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-1.5 mt-4">
-              <Clock size={13} className="text-text-muted" />
-              <span className="text-sm text-text-secondary">
-                Every day at <span className="font-mono font-semibold text-text-primary">{previewTime}</span>
+            <div className="flex flex-col gap-1 mt-4">
+              <div className="flex items-center gap-1.5">
+                <Clock size={13} className="text-text-muted" />
+                <span className="text-sm text-text-secondary">
+                  Every day at{' '}
+                  <span className="font-mono font-semibold text-text-primary">{previewTime}</span>
+                  {' '}
+                  <span className="text-text-muted">{tzAbbr}</span>
+                </span>
+              </div>
+              <span className="text-[11px] text-text-muted pl-[18px]">
+                Server runs at {utcPreviewTime} UTC
               </span>
             </div>
           </div>
