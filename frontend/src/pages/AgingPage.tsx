@@ -93,14 +93,11 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     };
   }, []);
 
-  if (!rows?.length) {
-    return <div className="flex items-center justify-center h-48 text-text-muted text-sm">No data</div>;
-  }
-
   const top = rows.slice(0, 12);
   const rowTotals = top.map(r => BUCKET_KEYS.reduce((s, k) => s + (r[k] || 0), 0));
 
   const option = useMemo(() => {
+    if (!top.length) return {};
     const getOpacity = (rowIdx: number, bucketIdx: number): number => {
       if (hoverRow === null) return 1;
       if (hoverRow === rowIdx) {
@@ -240,6 +237,10 @@ function AgingStackedBar({ rows, dimension }: { rows: any[]; dimension: 'dealer'
     const OPEN_STATUSES = 'In Review,Waiting on Dealer';
     navigate(`/claims?dealer=${encodeURIComponent(dealer)}&dateFrom=${fmt(dateFrom)}&dateTo=${fmt(dateTo)}&status=${encodeURIComponent(OPEN_STATUSES)}`);
   }, [top, dimension, navigate]);
+
+  if (!rows?.length) {
+    return <div className="flex items-center justify-center h-48 text-text-muted text-sm">No data</div>;
+  }
 
   return (
     <ReactECharts

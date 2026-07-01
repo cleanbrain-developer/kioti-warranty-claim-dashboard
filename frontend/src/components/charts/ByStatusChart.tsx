@@ -13,6 +13,66 @@ interface Props {
 export default function ByStatusChart({ data, loading }: Props) {
   const c = useChartColors();
 
+  const option = useMemo(() => {
+    if (!data?.length) return {};
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: c.tooltipBg,
+        borderColor: c.tooltipBorder,
+        borderWidth: 1,
+        textStyle: { color: c.tooltipText, fontSize: 13 },
+        formatter: (p: any) =>
+          `<div style="color:${c.tooltipText}"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value.toLocaleString()} claims (${p.percent}%)</div></div>`,
+      },
+      legend: {
+        orient: 'vertical',
+        right: 0,
+        top: 'center',
+        textStyle: { color: c.legendText, fontSize: 11 },
+        itemWidth: 10,
+        itemHeight: 10,
+        formatter: (name: string) => name.length > 16 ? name.slice(0, 16) + '…' : name,
+      },
+      series: [
+        {
+          name: 'Claims by Status',
+          type: 'pie',
+          radius: ['38%', '68%'],
+          center: ['38%', '50%'],
+          avoidLabelOverlap: true,
+          itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: (p: any) => p.percent >= 5 ? p.value.toLocaleString() : '',
+            color: '#ffffff',
+            fontSize: 11,
+            fontWeight: '600',
+            textShadowColor: 'rgba(0,0,0,0.6)',
+            textShadowBlur: 3,
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontSize: 13,
+              fontWeight: 'bold',
+              color: '#ffffff',
+              formatter: (p: any) => `${p.value.toLocaleString()}\n(${p.percent}%)`,
+            },
+            itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.4)' },
+          },
+          data: data.map((d, i) => ({
+            name: d.status,
+            value: d.count,
+            itemStyle: { color: COLORS[i % COLORS.length] },
+          })),
+        },
+      ],
+    };
+  }, [data, c]);
+
   if (loading) return <SkeletonChart height={280} />;
 
   if (!data?.length) {
@@ -22,63 +82,6 @@ export default function ByStatusChart({ data, loading }: Props) {
       </div>
     );
   }
-
-  const option = useMemo(() => ({
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: c.tooltipBg,
-      borderColor: c.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: c.tooltipText, fontSize: 13 },
-      formatter: (p: any) =>
-        `<div style="color:${c.tooltipText}"><div style="font-weight:600;margin-bottom:2px">${p.name}</div><div>${p.value.toLocaleString()} claims (${p.percent}%)</div></div>`,
-    },
-    legend: {
-      orient: 'vertical',
-      right: 0,
-      top: 'center',
-      textStyle: { color: c.legendText, fontSize: 11 },
-      itemWidth: 10,
-      itemHeight: 10,
-      formatter: (name: string) => name.length > 16 ? name.slice(0, 16) + '…' : name,
-    },
-    series: [
-      {
-        name: 'Claims by Status',
-        type: 'pie',
-        radius: ['38%', '68%'],
-        center: ['38%', '50%'],
-        avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
-        label: {
-          show: true,
-          position: 'inside',
-          formatter: (p: any) => p.percent >= 5 ? p.value.toLocaleString() : '',
-          color: '#ffffff',
-          fontSize: 11,
-          fontWeight: '600',
-          textShadowColor: 'rgba(0,0,0,0.6)',
-          textShadowBlur: 3,
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: 13,
-            fontWeight: 'bold',
-            color: '#ffffff',
-            formatter: (p: any) => `${p.value.toLocaleString()}\n(${p.percent}%)`,
-          },
-          itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.4)' },
-        },
-        data: data.map((d, i) => ({
-          name: d.status,
-          value: d.count,
-          itemStyle: { color: COLORS[i % COLORS.length] },
-        })),
-      },
-    ],
-  }), [data, c]);
 
   return (
     <ReactECharts
