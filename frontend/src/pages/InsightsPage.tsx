@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { CalendarDays } from 'lucide-react';
 import { api } from '../api/client';
 import KPICards from '../components/charts/KPICards';
 import ByStatusChart from '../components/charts/ByStatusChart';
@@ -155,51 +156,64 @@ export default function InsightsPage() {
 
   return (
     <div className="space-y-6 animate-slide-up">
-      {/* Period filter */}
-      <PeriodFilter period={period} onChange={setPeriod} years={YEARS} />
 
-      {/* KPI row */}
-      <KPICards data={overview} loading={loadingOverview} />
+      {/* ── Period-scoped zone ───────────────────────────────────────────────
+          KPICards / Financial Summary / Claims by Status all respond to the
+          Period selector above — they are grouped here to make that clear.    */}
+      <section className="rounded-xl border border-accent-blue/25 p-4 space-y-4">
+        {/* Zone header */}
+        <div className="flex items-center gap-2">
+          <CalendarDays size={12} className="text-accent-blue shrink-0" />
+          <span className="text-[10px] font-bold text-accent-blue uppercase tracking-widest">Period</span>
+          <div className="h-px flex-1 bg-accent-blue/20" />
+        </div>
 
-      {/* Financial summary row */}
-      <div>
-        <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
-          Financial Summary
-        </h2>
-        <FinancialSummaryCards data={financialSummary} loading={loadingFinancial} />
-      </div>
+        {/* Period selector */}
+        <PeriodFilter period={period} onChange={setPeriod} years={YEARS} />
 
-      {/* Status + Trend row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* KPI cards */}
+        <KPICards data={overview} loading={loadingOverview} />
+
+        {/* Financial summary */}
+        <div>
+          <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+            Financial Summary
+          </h2>
+          <FinancialSummaryCards data={financialSummary} loading={loadingFinancial} />
+        </div>
+
+        {/* Claims by Status */}
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">
             Claims by Status
           </h2>
           <ByStatusChart data={byStatus || []} loading={loadingStatus} />
         </div>
+      </section>
 
-        <div className="card p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide mb-4">
-            Monthly Claim Trend (Last 12 Months)
+      {/* Monthly Trend — always last 12 months, not period-filtered */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+            Monthly Claim Trend
           </h2>
-          <MonthlyTrendChart data={trend || []} loading={loadingTrend} />
+          <span className="text-xs text-text-muted">Last 12 months · All claims</span>
         </div>
+        <MonthlyTrendChart data={trend || []} loading={loadingTrend} />
       </div>
 
-      {/* Open by Dealer row */}
+      {/* Open by Dealer — live open claims, not period-filtered */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
             Open Claims by Dealer
           </h2>
-          <span className="text-xs text-text-muted">
-            Top 20 · Click bar to view in Claims tab
-          </span>
+          <span className="text-xs text-text-muted">Top 20 · Click bar to view in Claims tab</span>
         </div>
         <ByAssigneeChart data={openByDealer || []} loading={loadingOpenByDealer} />
       </div>
 
-      {/* HQ Claims Analysis */}
+      {/* HQ Claims Analysis — all-time, not period-filtered */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
@@ -210,13 +224,13 @@ export default function InsightsPage() {
         <HQClaimStatsChart data={hqClaimStats} loading={loadingHQ} />
       </div>
 
-      {/* SCA Claims by Month */}
+      {/* SCA Claims by Month — all-time, grouped by approval date */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
             SCA Claims by Month
           </h2>
-          <span className="text-[10px] text-text-muted">Outside warranty parameters · Authorization field starts with "SCA-"</span>
+          <span className="text-[10px] text-text-muted">Grouped by approval date · Authorization starts with "SCA-"</span>
         </div>
         <SCAClaimsChart data={scaByMonth} loading={loadingSCA} />
       </div>
