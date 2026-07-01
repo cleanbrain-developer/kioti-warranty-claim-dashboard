@@ -286,16 +286,16 @@ export class AnalyticsService {
   }
 
   async getSCAClaimsByMonth() {
+    // Mirrors the SF "SCA Claimed Log" report:
+    //   - Grouped by Approval Date (not submitted date)
+    //   - Amount = Labor + Parts (Total Exc. Tax, matching SF "Total Amount Exc. Tax (converted)")
+    //   - Status: In Review / Waiting on Dealer / Approved only
+    //   - Excludes records whose Authorization Number contains "HCR"
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT
-        TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM') as month,
+        TO_CHAR(approved_date, 'YYYY-MM') as month,
         COUNT(*)::int as count,
-        COALESCE(SUM(
-          COALESCE(
-            NULLIF(total_amount, 0),
-            COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0)
-          )
-        ), 0)::float as total_amount,
+        COALESCE(SUM(COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0)), 0)::float as total_amount,
         COUNT(DISTINCT dealer_name)::int as dealer_count
       FROM warranty_claims
       WHERE raw_data IS NOT NULL
@@ -304,8 +304,17 @@ export class AnalyticsService {
           OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
           OR raw_data::text LIKE '%"SCA-%'
         )
-        AND COALESCE(submitted_date, created_at) IS NOT NULL
-      GROUP BY TO_CHAR(COALESCE(submitted_date, created_at), 'YYYY-MM')
+        AND (
+          (raw_data->>'Authorization_Number__c') IS NULL
+          OR (raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
+        )
+        AND (
+          status ILIKE '%in review%'
+          OR status ILIKE '%waiting on dealer%'
+          OR status ILIKE '%approved%'
+        )
+        AND approved_date IS NOT NULL
+      GROUP BY TO_CHAR(approved_date, 'YYYY-MM')
       ORDER BY month ASC
       LIMIT 24
     `;

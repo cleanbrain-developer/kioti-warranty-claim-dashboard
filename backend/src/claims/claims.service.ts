@@ -99,6 +99,10 @@ export class ClaimsService {
             OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
             OR raw_data::text LIKE '%"SCA-%'
           )
+          AND (
+            (raw_data->>'Authorization_Number__c') IS NULL
+            OR (raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
+          )
       `;
       where.id = { in: scaRows.map(r => r.id) };
     }

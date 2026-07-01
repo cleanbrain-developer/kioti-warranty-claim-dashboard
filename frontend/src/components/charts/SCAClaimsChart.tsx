@@ -113,7 +113,7 @@ export default function SCAClaimsChart({ data, loading }: Props) {
     const lastDay = new Date(y, m, 0).getDate();
     const dateFrom = `${row.month}-01`;
     const dateTo = `${row.month}-${String(lastDay).padStart(2, '0')}`;
-    navigate(`/claims?scaOnly=true&dateFrom=${dateFrom}&dateTo=${dateTo}`);
+    navigate(`/claims?scaOnly=true&dateField=approvedDate&dateFrom=${dateFrom}&dateTo=${dateTo}`);
   };
 
   return (
