@@ -73,4 +73,9 @@ export class AnalyticsController {
   getSCAClaimsByMonth() {
     return this.analyticsService.getSCAClaimsByMonth();
   }
+
+  @Get('diagnostic/claim-fields')
+  getDiagnosticClaimFields() {
+    return this.analyticsService.getDiagnosticClaimFields();
+  }
 }

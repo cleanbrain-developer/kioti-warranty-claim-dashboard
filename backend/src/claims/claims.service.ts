@@ -169,12 +169,31 @@ export class ClaimsService {
 
     const data = records.map(r => ({
       ...r,
-      // Derive totalAmount from labor+parts if the total field itself is null/zero
-      totalAmount: r.totalAmount
-        ? Number(r.totalAmount)
-        : (r.laborAmount != null || r.partsAmount != null)
-          ? Number(r.laborAmount ?? 0) + Number(r.partsAmount ?? 0)
-          : null,
+      // Amount fallback chain:
+      //   P1: total_amount DB column
+      //   P2: labor_amount + parts_amount DB columns
+      //   P3: adaptive raw_data scan — sums fields whose key contains 'labor' or 'part'
+      //       so it works regardless of KIOTI-specific SF custom field naming
+      totalAmount: (() => {
+        if (r.totalAmount) return Number(r.totalAmount);
+        if (r.laborAmount != null || r.partsAmount != null)
+          return Number(r.laborAmount ?? 0) + Number(r.partsAmount ?? 0);
+        const rd = r.rawData as Record<string, any> | null;
+        if (rd && typeof rd === 'object') {
+          let sum = 0;
+          for (const [k, v] of Object.entries(rd)) {
+            if (v == null) continue;
+            const lk = k.toLowerCase();
+            const isLaborField = lk.includes('labor') && !lk.includes('description') && !lk.includes('type') && !lk.includes('date') && !lk.includes('number');
+            const isPartsField = lk.includes('part') && !lk.includes('department') && !lk.includes('partner') && !lk.includes('description') && !lk.includes('type') && !lk.includes('date') && !lk.includes('number');
+            if (!isLaborField && !isPartsField) continue;
+            const n = typeof v === 'number' ? v : parseFloat(String(v));
+            if (!isNaN(n) && n > 0) sum += n;
+          }
+          if (sum > 0) return sum;
+        }
+        return null;
+      })(),
       laborAmount: r.laborAmount ? Number(r.laborAmount) : null,
       partsAmount: r.partsAmount ? Number(r.partsAmount) : null,
       // Fall back to SF record Owner name when the custom assignedTo field is unmapped

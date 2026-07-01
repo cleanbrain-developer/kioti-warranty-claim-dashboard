@@ -291,45 +291,126 @@ export class AnalyticsService {
     //   - Amount = Labor + Parts (Total Exc. Tax, matching SF "Total Amount Exc. Tax (converted)")
     //   - Status: In Review / Waiting on Dealer / Approved only
     //   - Excludes records whose Authorization Number contains "HCR"
+    //
+    // Amount fallback chain:
+    //   1. DB columns labor_amount + parts_amount (populated when field mapping succeeds)
+    //   2. Adaptive json_each_text scan: sums all raw_data fields whose key contains
+    //      'labor' or 'part' (with common false-positive exclusions) — works regardless
+    //      of KIOTI-specific SF field naming
+    //   3. total_amount DB column
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT
-        TO_CHAR(approved_date, 'YYYY-MM') as month,
+        TO_CHAR(wc.approved_date, 'YYYY-MM') as month,
         COUNT(*)::int as count,
         COALESCE(SUM(
           COALESCE(
-            NULLIF(COALESCE(labor_amount, 0) + COALESCE(parts_amount, 0), 0),
-            NULLIF(
-              COALESCE((NULLIF(raw_data->>'TotalLaborAmount__c',''))::numeric, 0) +
-              COALESCE((NULLIF(raw_data->>'TotalPartAmount__c',''))::numeric, 0),
-              0
-            ),
-            NULLIF(total_amount, 0),
+            NULLIF(COALESCE(wc.labor_amount, 0) + COALESCE(wc.parts_amount, 0), 0),
+            NULLIF((
+              SELECT COALESCE(SUM(
+                CASE WHEN j.v ~ '^[0-9]+(\.[0-9]+)?$' THEN j.v::numeric ELSE 0 END
+              ), 0)
+              FROM json_each_text(wc.raw_data) AS j(k, v)
+              WHERE (
+                (j.k ILIKE '%labor%' AND j.k NOT ILIKE '%description%' AND j.k NOT ILIKE '%type%' AND j.k NOT ILIKE '%date%' AND j.k NOT ILIKE '%number%')
+                OR
+                (j.k ILIKE '%part%' AND j.k NOT ILIKE '%department%' AND j.k NOT ILIKE '%partner%' AND j.k NOT ILIKE '%description%' AND j.k NOT ILIKE '%type%' AND j.k NOT ILIKE '%date%' AND j.k NOT ILIKE '%number%')
+              )
+                AND j.v IS NOT NULL
+                AND j.v != ''
+                AND j.v != 'null'
+            ), 0),
+            NULLIF(wc.total_amount, 0),
             0
           )
         ), 0)::float as total_amount,
-        COUNT(DISTINCT dealer_name)::int as dealer_count
-      FROM warranty_claims
-      WHERE raw_data IS NOT NULL
+        COUNT(DISTINCT wc.dealer_name)::int as dealer_count
+      FROM warranty_claims wc
+      WHERE wc.raw_data IS NOT NULL
         AND (
-          (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
-          OR (raw_data->>'Authorization_Number__c') LIKE 'sca-%'
-          OR raw_data::text LIKE '%"SCA-%'
+          (wc.raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
+          OR (wc.raw_data->>'Authorization_Number__c') LIKE 'sca-%'
+          OR wc.raw_data::text LIKE '%"SCA-%'
         )
         AND (
-          (raw_data->>'Authorization_Number__c') IS NULL
-          OR (raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
+          (wc.raw_data->>'Authorization_Number__c') IS NULL
+          OR (wc.raw_data->>'Authorization_Number__c') NOT ILIKE '%HCR%'
         )
         AND (
-          status ILIKE '%in review%'
-          OR status ILIKE '%waiting on dealer%'
-          OR status ILIKE '%approved%'
+          wc.status ILIKE '%in review%'
+          OR wc.status ILIKE '%waiting on dealer%'
+          OR wc.status ILIKE '%approved%'
         )
-        AND approved_date IS NOT NULL
-      GROUP BY TO_CHAR(approved_date, 'YYYY-MM')
+        AND wc.approved_date IS NOT NULL
+      GROUP BY TO_CHAR(wc.approved_date, 'YYYY-MM')
       ORDER BY month ASC
       LIMIT 24
     `;
     return rows;
+  }
+
+  async getDiagnosticClaimFields() {
+    const [fieldMappings, columnStats, sampleSCAClaims, sampleAllClaims] = await Promise.all([
+      this.prisma.fieldMapping.findMany({
+        where: { objectName: 'warranty_claim' },
+        orderBy: { fieldKey: 'asc' },
+        select: { fieldKey: true, fieldName: true },
+      }),
+      this.prisma.$queryRaw<any[]>`
+        SELECT
+          COUNT(*)::int as total_claims,
+          COUNT(*) FILTER (WHERE raw_data IS NOT NULL)::int as has_raw_data,
+          COUNT(*) FILTER (WHERE total_amount IS NOT NULL AND total_amount > 0)::int as total_amount_has_value,
+          COUNT(*) FILTER (WHERE labor_amount IS NOT NULL AND labor_amount > 0)::int as labor_amount_has_value,
+          COUNT(*) FILTER (WHERE parts_amount IS NOT NULL AND parts_amount > 0)::int as parts_amount_has_value
+        FROM warranty_claims
+      `,
+      // Sample SCA claims — show all raw_data fields that look like amounts
+      this.prisma.$queryRaw<any[]>`
+        SELECT
+          id,
+          raw_data->>'Authorization_Number__c' as auth_number,
+          total_amount,
+          labor_amount,
+          parts_amount,
+          (
+            SELECT json_agg(json_build_object('key', j.k, 'value', j.v) ORDER BY j.k)
+            FROM json_each_text(raw_data) AS j(k, v)
+            WHERE (j.k ILIKE '%amount%' OR j.k ILIKE '%labor%' OR j.k ILIKE '%part%' OR j.k ILIKE '%cost%' OR j.k ILIKE '%price%' OR j.k ILIKE '%total%')
+              AND j.v IS NOT NULL AND j.v != '' AND j.v != 'null'
+          ) as amount_like_fields
+        FROM warranty_claims
+        WHERE raw_data IS NOT NULL
+          AND (
+            (raw_data->>'Authorization_Number__c') LIKE 'SCA-%'
+            OR raw_data::text LIKE '%"SCA-%'
+          )
+        LIMIT 3
+      `,
+      // Also sample non-SCA claims to see overall field names
+      this.prisma.$queryRaw<any[]>`
+        SELECT
+          (
+            SELECT json_agg(DISTINCT j.k ORDER BY j.k)
+            FROM warranty_claims wc2, json_each_text(wc2.raw_data) AS j(k, v)
+            WHERE (j.k ILIKE '%amount%' OR j.k ILIKE '%labor%' OR j.k ILIKE '%part%' OR j.k ILIKE '%cost%')
+              AND j.v IS NOT NULL AND j.v != '' AND j.v != 'null' AND j.v != '0'
+          ) as all_amount_field_names
+      `,
+    ]);
+
+    return {
+      fieldMappings,
+      columnStats: columnStats[0],
+      sampleSCAClaims: sampleSCAClaims.map(r => ({
+        id: r.id,
+        authNumber: r.auth_number,
+        dbTotalAmount: r.total_amount ? Number(r.total_amount) : null,
+        dbLaborAmount: r.labor_amount ? Number(r.labor_amount) : null,
+        dbPartsAmount: r.parts_amount ? Number(r.parts_amount) : null,
+        rawDataAmountLikeFields: r.amount_like_fields || [],
+      })),
+      allAmountFieldNamesInDB: sampleAllClaims[0]?.all_amount_field_names || [],
+    };
   }
 
   async getAging() {
